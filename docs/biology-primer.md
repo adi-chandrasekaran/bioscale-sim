@@ -1,0 +1,5 @@
+# Biology primer for this project
+
+DNA stores genetic information. Genes are stretches of DNA that can be transcribed into RNA. RNA can be translated into proteins. Proteins perform most biological work inside cells. A mutation is a DNA change that may alter RNA, protein sequence, or gene regulation. If a mutation changes a protein's structure or function, the altered protein may disturb pathways. Pathways are connected networks of biological reactions and signals. Pathway states combine to shape cell phenotypes such as division, death, repair, stress, inflammation, and secretion. Many cells form populations; population dynamics explain expansion, disappearance, competition, and clonal selection. Multiple populations interacting inside tissues, immune systems, or microbiomes form biological ecosystems.
+
+This project models that chain with simplified computational modules. It is not a wet-lab protocol and does not validate real treatments. Its purpose is to create a transparent research and education framework for multi-scale computational biology.

@@ -1,0 +1,158 @@
+{
+  "diseases": {
+    "cancer": {
+      "label": "Cancer / uncontrolled cell growth demo",
+      "description": "A simplified demo disease model focused on loss of tumor suppression, DNA damage response, apoptosis, and abnormal clonal expansion.",
+      "affected_cell_context": "epithelial-like proliferating tissue",
+      "known_processes": ["DNA damage response", "cell cycle arrest", "apoptosis", "immune evasion", "clonal expansion"],
+      "known_genes": ["TP53", "MDM2", "CDKN1A", "BAX", "ATM"],
+      "candidate_gene_weights": {
+        "TP53": 0.98,
+        "MDM2": 0.74,
+        "CDKN1A": 0.70,
+        "BAX": 0.66,
+        "ATM": 0.62
+      }
+    },
+    "neurodegeneration": {
+      "label": "Neurodegeneration demo",
+      "description": "A simplified demo disease model focused on neuronal stress, inflammation, protein handling, and microglial activation.",
+      "affected_cell_context": "neuron / microglia environment",
+      "known_processes": ["protein aggregation", "mitochondrial stress", "inflammation", "synaptic dysfunction"],
+      "known_genes": ["APOE", "TREM2", "MAPT", "APP"],
+      "candidate_gene_weights": {
+        "APOE": 0.86,
+        "TREM2": 0.82,
+        "MAPT": 0.72,
+        "APP": 0.68
+      }
+    }
+  },
+  "genes": {
+    "TP53": {
+      "name": "tumor protein p53",
+      "function_summary": "A transcription factor that responds to DNA damage and cellular stress by activating genes involved in cell cycle arrest, DNA repair, senescence, or apoptosis.",
+      "dna_concept": "The TP53 gene contains DNA instructions for making p53 protein. When stress occurs, cells increase p53 signaling so damaged cells pause, repair, or die.",
+      "rna_concept": "TP53 DNA can be transcribed into TP53 mRNA. That mRNA is translated by ribosomes into the p53 amino acid chain.",
+      "protein_id": "P04637",
+      "expressed_in": ["many tissues", "proliferating cells", "stressed cells"],
+      "pathways": ["p53_damage_response"],
+      "domains": [
+        {"name": "transactivation domain", "start": 1, "end": 92},
+        {"name": "DNA-binding domain", "start": 102, "end": 292},
+        {"name": "tetramerization domain", "start": 323, "end": 356}
+      ],
+      "interactions": ["MDM2", "CDKN1A", "BAX", "ATM"]
+    },
+    "MDM2": {
+      "name": "MDM2 proto-oncogene",
+      "function_summary": "An E3 ubiquitin ligase that suppresses p53 by marking it for degradation. It participates in a feedback loop with p53.",
+      "protein_id": "Q00987",
+      "expressed_in": ["many tissues"],
+      "pathways": ["p53_damage_response"],
+      "domains": [{"name": "p53-binding domain", "start": 25, "end": 109}],
+      "interactions": ["TP53"]
+    },
+    "CDKN1A": {
+      "name": "cyclin-dependent kinase inhibitor 1A / p21",
+      "function_summary": "A p53 target gene that helps stop the cell cycle after DNA damage.",
+      "protein_id": "P38936",
+      "expressed_in": ["many tissues"],
+      "pathways": ["p53_damage_response"],
+      "domains": [{"name": "CDK-binding region", "start": 1, "end": 90}],
+      "interactions": ["TP53"]
+    },
+    "BAX": {
+      "name": "BCL2-associated X protein",
+      "function_summary": "A pro-apoptotic protein that helps trigger programmed cell death when damage is severe.",
+      "protein_id": "Q07812",
+      "expressed_in": ["many tissues"],
+      "pathways": ["p53_damage_response"],
+      "domains": [{"name": "BCL-2 homology domain", "start": 59, "end": 171}],
+      "interactions": ["TP53"]
+    },
+    "ATM": {
+      "name": "ATM serine/threonine kinase",
+      "function_summary": "A kinase that senses DNA double-strand breaks and helps activate p53-mediated damage response.",
+      "protein_id": "Q13315",
+      "expressed_in": ["many tissues"],
+      "pathways": ["p53_damage_response"],
+      "domains": [{"name": "PI3K/PI4K-like kinase domain", "start": 2712, "end": 2962}],
+      "interactions": ["TP53"]
+    }
+  },
+  "mutations": {
+    "TP53": {
+      "p.R175H": {
+        "notation": "p.R175H",
+        "kind": "missense",
+        "position": 175,
+        "from_aa": "R",
+        "to_aa": "H",
+        "domain": "DNA-binding domain",
+        "biological_interpretation": "Arginine at position 175 is in the p53 DNA-binding domain. Replacing it with histidine is modeled as reducing DNA-binding and tumor-suppressor transcriptional activity.",
+        "activity_multiplier": 0.30,
+        "stability_multiplier": 0.55,
+        "binding_multiplier": 0.25,
+        "confidence": 0.82
+      },
+      "p.R273H": {
+        "notation": "p.R273H",
+        "kind": "missense",
+        "position": 273,
+        "from_aa": "R",
+        "to_aa": "H",
+        "domain": "DNA-binding domain",
+        "biological_interpretation": "Arginine at position 273 is modeled as important for DNA contact. Mutation weakens sequence-specific DNA binding while leaving some structural stability.",
+        "activity_multiplier": 0.38,
+        "stability_multiplier": 0.70,
+        "binding_multiplier": 0.20,
+        "confidence": 0.78
+      },
+      "loss_of_function": {
+        "notation": "loss_of_function",
+        "kind": "abstract loss-of-function",
+        "position": null,
+        "from_aa": null,
+        "to_aa": null,
+        "domain": "whole protein",
+        "biological_interpretation": "A generic knockout-like TP53 loss-of-function state used for simulation when no precise variant is specified.",
+        "activity_multiplier": 0.10,
+        "stability_multiplier": 0.30,
+        "binding_multiplier": 0.10,
+        "confidence": 0.60
+      }
+    }
+  },
+  "pathways": {
+    "p53_damage_response": {
+      "label": "p53 DNA damage response pathway",
+      "description": "A simplified pathway model for p53 activation after DNA damage, leading to cell cycle arrest, DNA repair, apoptosis, and negative feedback through MDM2.",
+      "nodes": {
+        "DNA_DAMAGE": {"type": "stress", "baseline": 0.30},
+        "ATM": {"type": "protein", "baseline": 0.60},
+        "TP53": {"type": "protein", "baseline": 0.70},
+        "MDM2": {"type": "protein", "baseline": 0.45},
+        "CDKN1A": {"type": "gene_product", "baseline": 0.50},
+        "BAX": {"type": "gene_product", "baseline": 0.42},
+        "DNA_REPAIR": {"type": "process", "baseline": 0.55},
+        "CELL_CYCLE_ARREST": {"type": "process", "baseline": 0.48},
+        "APOPTOSIS": {"type": "process", "baseline": 0.38},
+        "PROLIFERATION_SIGNAL": {"type": "process", "baseline": 0.42}
+      },
+      "edges": [
+        {"source": "DNA_DAMAGE", "target": "ATM", "relation": "activates", "weight": 0.75},
+        {"source": "ATM", "target": "TP53", "relation": "activates", "weight": 0.70},
+        {"source": "TP53", "target": "CDKN1A", "relation": "activates", "weight": 0.85},
+        {"source": "TP53", "target": "BAX", "relation": "activates", "weight": 0.75},
+        {"source": "TP53", "target": "DNA_REPAIR", "relation": "activates", "weight": 0.55},
+        {"source": "CDKN1A", "target": "CELL_CYCLE_ARREST", "relation": "activates", "weight": 0.85},
+        {"source": "BAX", "target": "APOPTOSIS", "relation": "activates", "weight": 0.80},
+        {"source": "CELL_CYCLE_ARREST", "target": "PROLIFERATION_SIGNAL", "relation": "inhibits", "weight": 0.65},
+        {"source": "APOPTOSIS", "target": "PROLIFERATION_SIGNAL", "relation": "inhibits", "weight": 0.50},
+        {"source": "TP53", "target": "MDM2", "relation": "activates", "weight": 0.45},
+        {"source": "MDM2", "target": "TP53", "relation": "inhibits", "weight": 0.45}
+      ]
+    }
+  }
+}
