@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
-import type { Catalog, SimulationRequest, SimulationResult, NodeState, Edge, PopulationPoint } from "./types";
+import type { Catalog, SimulationRequest, SimulationResult, PopulationPoint } from "./types";
+import { PathwayGraph } from "./PathwayGraph";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
@@ -43,61 +44,6 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
       </div>
       <div className="barOuter"><div className="barInner" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} /></div>
     </div>
-  );
-}
-
-function PathwayGraph({ nodes, edges }: { nodes: NodeState[]; edges: Edge[] }) {
-  const positions: Record<string, { x: number; y: number }> = {
-    DNA_DAMAGE: { x: 80, y: 150 },
-    ATM: { x: 220, y: 150 },
-    TP53: { x: 360, y: 150 },
-    MDM2: { x: 360, y: 55 },
-    CDKN1A: { x: 520, y: 85 },
-    BAX: { x: 520, y: 210 },
-    DNA_REPAIR: { x: 520, y: 150 },
-    CELL_CYCLE_ARREST: { x: 700, y: 85 },
-    APOPTOSIS: { x: 700, y: 210 },
-    PROLIFERATION_SIGNAL: { x: 870, y: 150 },
-  };
-  const nodeMap = Object.fromEntries(nodes.map((n) => [n.id, n]));
-  return (
-    <svg className="pathwaySvg" viewBox="0 0 960 280" role="img" aria-label="Pathway graph">
-      <defs>
-        <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-          <path d="M0,0 L0,6 L9,3 z" />
-        </marker>
-      </defs>
-      {edges.map((edge) => {
-        const source = positions[edge.source];
-        const target = positions[edge.target];
-        if (!source || !target) return null;
-        const isInhibit = edge.relation === "inhibits";
-        return (
-          <line
-            key={`${edge.source}-${edge.target}`}
-            x1={source.x}
-            y1={source.y}
-            x2={target.x}
-            y2={target.y}
-            className={isInhibit ? "edge inhibit" : "edge activate"}
-            markerEnd={isInhibit ? undefined : "url(#arrow)"}
-          />
-        );
-      })}
-      {nodes.map((node) => {
-        const p = positions[node.id] ?? { x: 50, y: 50 };
-        const intensity = Math.max(0.1, Math.min(1, node.activity));
-        return (
-          <g key={node.id}>
-            <circle cx={p.x} cy={p.y} r={30} className="nodeCircle" opacity={0.45 + intensity * 0.55} />
-            <text x={p.x} y={p.y - 4} textAnchor="middle" className="nodeLabel">{node.id.replaceAll("_", " ")}</text>
-            <text x={p.x} y={p.y + 13} textAnchor="middle" className="nodeValue">{fmt(node.activity)}</text>
-            {nodeMap[node.id]?.delta < -0.1 && <text x={p.x} y={p.y + 46} textAnchor="middle" className="downText">down</text>}
-            {nodeMap[node.id]?.delta > 0.1 && <text x={p.x} y={p.y + 46} textAnchor="middle" className="upText">up</text>}
-          </g>
-        );
-      })}
-    </svg>
   );
 }
 

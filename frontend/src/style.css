@@ -187,24 +187,150 @@ p { color: #2c3b37; line-height: 1.58; }
   gap: 8px 18px;
 }
 
+.pathwayGraphWrap {
+  position: relative;
+  margin: 8px 0 12px;
+}
+
 .pathwaySvg, .chartSvg {
   width: 100%;
   background: #f7fbf8;
   border: 1px solid #dce9df;
   border-radius: 18px;
-  margin: 8px 0 12px;
+  display: block;
 }
+
+.pathway-node,
+.pathway-edge {
+  transition: opacity 0.15s ease;
+}
+
+.pathway-node.dimmed,
+.pathway-edge.dimmed {
+  opacity: 0.28;
+}
+
+.pathway-node.highlighted .nodeCircle {
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 6px rgba(35, 116, 87, 0.35));
+}
+
+.pathway-node.selected .nodeCircle {
+  stroke: #12201d;
+  stroke-width: 3.5;
+}
+
+.pathway-edge.highlighted .edge-visible,
+.pathway-edge.selected .edge-visible {
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(35, 116, 87, 0.25));
+}
+
+.pathway-edge.selected .edge-visible.inhibit,
+.pathway-edge.highlighted .edge-visible.inhibit {
+  filter: drop-shadow(0 0 4px rgba(156, 77, 77, 0.3));
+}
+
 .edge {
   stroke-width: 3;
   opacity: 0.72;
 }
+
+.edge-hit {
+  stroke: transparent;
+  stroke-width: 16;
+  pointer-events: stroke;
+}
+
 .activate { stroke: #237457; }
 .inhibit { stroke: #9c4d4d; stroke-dasharray: 8 7; }
-.nodeCircle { fill: #cce8dc; stroke: #237457; stroke-width: 2; }
+.nodeCircle { fill: #cce8dc; stroke: #237457; stroke-width: 2; transition: stroke-width 0.15s ease, filter 0.15s ease; }
 .nodeLabel { font-size: 10px; font-weight: 900; fill: #12201d; }
 .nodeValue { font-size: 11px; font-weight: 700; fill: #355348; }
 .upText { font-size: 10px; font-weight: 900; fill: #237457; }
 .downText { font-size: 10px; font-weight: 900; fill: #9c4d4d; }
+
+.pathwayTooltip {
+  position: absolute;
+  z-index: 2;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #cfe1d5;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 12px 32px rgba(18, 32, 29, 0.14);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #2c3b37;
+}
+
+.pathwayTooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pathwayTooltip strong {
+  display: block;
+  font-size: 14px;
+  color: #12201d;
+  margin-bottom: 2px;
+}
+
+.pathwayTooltipType {
+  display: block;
+  font-size: 12px;
+  color: #64746f;
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+
+.pathwayTooltip dl {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.pathwayTooltip dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pathwayTooltip dt {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+  color: #57766b;
+}
+
+.pathwayTooltip dd {
+  margin: 0;
+  font-weight: 700;
+  color: #12201d;
+}
+
+.pathwayTooltipTrend {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: lowercase;
+}
+
+.pathwayTooltipTrend.up { color: #237457; }
+.pathwayTooltipTrend.down { color: #9c4d4d; }
+.pathwayTooltipTrend.neutral { color: #64746f; }
+
+.pathwayTooltipHint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: #64746f;
+}
 .axis { stroke: #8aa99d; stroke-width: 2; }
 .chartLine { stroke: #237457; stroke-width: 4; }
 .axisLabel { font-size: 13px; font-weight: 800; fill: #57766b; }
