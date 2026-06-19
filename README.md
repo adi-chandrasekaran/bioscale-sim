@@ -29,9 +29,17 @@ backend/
     adapters/              Optional real-world API connector stubs
   data/knowledge_base.json Demo knowledge base
   tests/                   Pytest tests
+  pyproject.toml           Ruff and pytest configuration
 frontend/
   src/                     React + TypeScript UI
   package.json             Vite app
+docs/
+  README.md                Documentation index
+
+See also:
+
+- [Agent constitution](./AGENTS.md)
+- [Documentation index](./docs/README.md)
 ```
 
 ## Run backend
@@ -51,6 +59,9 @@ cd backend
 pytest -q
 ```
 
+For local Python linting, install the dev dependency listed in `backend/requirements-dev.txt`
+and run `ruff check .` from `backend/`.
+
 ## Run frontend
 
 In another terminal:
@@ -62,6 +73,13 @@ npm run dev
 ```
 
 Open the local Vite URL, usually `http://localhost:5173`.
+
+Type-check the frontend with:
+
+```bash
+cd frontend
+npm run lint
+```
 
 ## API
 
