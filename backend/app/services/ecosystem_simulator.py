@@ -31,4 +31,7 @@ def simulate_ecosystem(cell: CellPhenotypeResult, population: PopulationResult, 
         nutrient_stress=round4(nutrient_stress),
         ecosystem_risk_score=round4(ecosystem_risk),
         explanation=explanation,
+        computed_from_gene=cell.computed_from_gene,
+        computed_from_pathway=cell.computed_from_pathway,
+        computed_from_protein_activity=cell.computed_from_protein_activity,
     )

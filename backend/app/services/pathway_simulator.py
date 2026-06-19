@@ -6,20 +6,26 @@ from app.models import PathwayEdge, PathwayNodeState, PathwayResult, ProteinEffe
 from app.services.utils import clamp, round4
 
 
-def simulate_pathway(kb: Dict[str, Any], protein_effect: ProteinEffectResult, iterations: int = 8) -> PathwayResult:
-    gene = kb["genes"][protein_effect.gene]
-    pathway_id = gene.get("pathways", ["p53_damage_response"])[0]
-    pathway = kb["pathways"][pathway_id]
+def _get_active_pathway(kb: Dict[str, Any], gene_symbol: str) -> tuple[str, Dict[str, Any]]:
+    gene = kb["genes"][gene_symbol]
+    pathway_key = gene.get("active_pathway_key") or gene.get("pathways", [None])[0]
+    if not pathway_key or pathway_key not in kb.get("pathways", {}):
+        raise ValueError(f"No active pathway configured for gene '{gene_symbol}'.")
+    return pathway_key, kb["pathways"][pathway_key]
 
-    # Start at baseline node activities.
+
+def simulate_pathway(kb: Dict[str, Any], protein_effect: ProteinEffectResult, iterations: int = 8) -> PathwayResult:
+    gene_symbol = protein_effect.gene
+    pathway_id, pathway = _get_active_pathway(kb, gene_symbol)
+    gene_meta = kb["genes"][gene_symbol]
+
     baseline = {node_id: meta["baseline"] for node_id, meta in pathway["nodes"].items()}
     activity = dict(baseline)
 
-    # Inject protein perturbation from mutation/protein layer.
-    if protein_effect.gene in activity:
-        activity[protein_effect.gene] = clamp(activity[protein_effect.gene] * protein_effect.activity)
+    perturbation_node = gene_symbol if gene_symbol in activity else gene_symbol
+    if perturbation_node in activity:
+        activity[perturbation_node] = clamp(baseline[perturbation_node] * protein_effect.activity)
 
-    # Propagate through pathway network. This is deliberately interpretable, not pretending to be full biophysics.
     edges = pathway["edges"]
     for _ in range(iterations):
         next_activity = dict(activity)
@@ -32,13 +38,13 @@ def simulate_pathway(kb: Dict[str, Any], protein_effect: ProteinEffectResult, it
                 next_activity[target] = clamp(next_activity[target] + signal_delta)
             elif edge["relation"] == "inhibits":
                 next_activity[target] = clamp(next_activity[target] - signal_delta)
-        # Keep the mutated protein anchored to the predicted loss-of-function value.
-        if protein_effect.gene in next_activity:
-            next_activity[protein_effect.gene] = clamp(baseline[protein_effect.gene] * protein_effect.activity)
+        if perturbation_node in next_activity:
+            next_activity[perturbation_node] = clamp(baseline[perturbation_node] * protein_effect.activity)
         activity = next_activity
 
     node_states: List[PathwayNodeState] = []
     disrupted: List[str] = []
+    changed_nodes: List[str] = []
     for node_id, meta in pathway["nodes"].items():
         delta = activity[node_id] - baseline[node_id]
         node_states.append(
@@ -50,15 +56,21 @@ def simulate_pathway(kb: Dict[str, Any], protein_effect: ProteinEffectResult, it
                 delta=round4(delta),
             )
         )
-        if abs(delta) >= 0.12 and meta["type"] == "process":
+        if abs(delta) >= 0.08:
+            changed_nodes.append(node_id)
+        if abs(delta) >= 0.12 and meta["type"] in {"process", "pathway"}:
             direction = "increased" if delta > 0 else "decreased"
             disrupted.append(f"{node_id} {direction}")
 
     pathway_edges = [PathwayEdge(**edge) for edge in edges]
+    source_label = pathway.get("selected_pathway_source", "Simulator model")
+    is_generic = pathway.get("is_generic_fallback", False)
+
     explanation = (
-        f"The pathway layer placed the altered {protein_effect.gene} protein into {pathway['label']}. "
-        "The reduced protein activity was propagated through activation and inhibition edges. "
-        "The strongest downstream changes are reported as disrupted cellular processes."
+        f"Pathway simulation perturbed {gene_symbol} ({gene_meta.get('protein_id', 'unknown')}) "
+        f"using protein activity={protein_effect.activity:.2f}. "
+        f"Signal propagated through {pathway['label']}. "
+        f"Changed nodes: {', '.join(changed_nodes) or 'none'}."
     )
 
     return PathwayResult(
@@ -69,4 +81,18 @@ def simulate_pathway(kb: Dict[str, Any], protein_effect: ProteinEffectResult, it
         edges=pathway_edges,
         disrupted_processes=disrupted,
         explanation=explanation,
+        selected_gene=gene_symbol,
+        selected_protein=gene_meta.get("protein_id"),
+        selected_pathway_name=pathway.get("selected_pathway_name") or pathway["label"],
+        selected_pathway_source=source_label,
+        selected_pathway_id=pathway.get("selected_pathway_id"),
+        is_generic_fallback=is_generic,
+        node_activities={k: round4(v) for k, v in activity.items()},
+        baseline_activities={k: round4(v) for k, v in baseline.items()},
+        changed_nodes=changed_nodes,
+        simulation_model_note=(
+            "Generic simulator pathway generated from selected gene evidence; edge weights are model assumptions."
+            if is_generic
+            else "Reactome provides pathway membership evidence; edge weights and propagation are simulator assumptions."
+        ),
     )

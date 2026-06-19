@@ -57,4 +57,7 @@ def simulate_population(cell: CellPhenotypeResult, req: SimulationRequest) -> Po
         final_mutated_fraction=round4(final_fraction),
         clonal_expansion_score=clonal_expansion_score,
         explanation=explanation,
+        computed_from_gene=cell.computed_from_gene,
+        computed_from_pathway=cell.computed_from_pathway,
+        computed_from_protein_activity=cell.computed_from_protein_activity,
     )

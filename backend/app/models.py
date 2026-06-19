@@ -1,34 +1,79 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
+ProvenanceCategory = Literal[
+    "external_database",
+    "local_curated",
+    "simulator_assumption",
+    "computed_model",
+]
+
+
+class ProvenanceEntry(BaseModel):
+    category: ProvenanceCategory
+    source: str
+    detail: Optional[str] = None
+
+
+class SearchResultItem(BaseModel):
+    id: str
+    label: str
+    subtitle: Optional[str] = None
+    source: str = "Open Targets"
+    meta: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SearchResponse(BaseModel):
+    query: str
+    source: str
+    available: bool
+    results: List[SearchResultItem] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
 class SimulationRequest(BaseModel):
-    disease: str = Field(default="cancer", description="Disease key from the local knowledge base")
-    gene: Optional[str] = Field(default="TP53", description="Gene symbol to simulate")
-    mutation: Optional[str] = Field(default="p.R175H", description="Mutation notation for the selected gene")
-    steps: int = Field(default=60, ge=5, le=300, description="Population/ecosystem simulation steps")
+    disease_id: str = Field(default="EFO_0000311", description="Open Targets disease ID (EFO/MONDO)")
+    disease_name: Optional[str] = Field(default="cancer", description="Human-readable disease label")
+    gene: str = Field(default="TP53", description="Gene symbol")
+    mutation: str = Field(default="p.R175H", description="Variant notation")
+    pathway_id: Optional[str] = Field(default=None, description="Optional Reactome pathway stId")
+    pathway_name: Optional[str] = Field(default=None, description="Optional Reactome pathway label")
+    steps: int = Field(default=60, ge=5, le=300)
     initial_mutated_fraction: float = Field(default=0.02, ge=0.001, le=0.95)
     initial_population: int = Field(default=10000, ge=100, le=1000000)
     immune_pressure: float = Field(default=0.55, ge=0.0, le=1.0)
     nutrient_level: float = Field(default=0.75, ge=0.0, le=1.0)
     stochastic_seed: int = Field(default=7)
+    use_external_evidence: bool = Field(default=True)
+    # Legacy compatibility
+    disease: Optional[str] = Field(default=None, description="Deprecated local disease key")
 
 
 class CandidateGene(BaseModel):
     symbol: str
     score: float
     reasons: List[str]
-    pathways: List[str]
-    interactions: List[str]
+    pathways: List[str] = Field(default_factory=list)
+    interactions: List[str] = Field(default_factory=list)
+    source: str = "Open Targets"
+    summary: Optional[str] = None
+    provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
 
 
 class DiseaseDiscoveryResult(BaseModel):
     disease: str
+    disease_id: Optional[str] = None
     label: str
     affected_cell_context: str
     candidates: List[CandidateGene]
+    summary: Optional[str] = None
+    external_evidence_available: bool = False
+    evidence_notice: Optional[str] = None
+    provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
+    raw_evidence: Dict[str, Any] = Field(default_factory=dict)
 
 
 class MutationResult(BaseModel):
@@ -43,6 +88,15 @@ class MutationResult(BaseModel):
     stability_multiplier: float
     binding_multiplier: float
     confidence: float
+    amino_acid_change: Optional[str] = None
+    clinvar_classification: Optional[str] = None
+    phenotypes: List[str] = Field(default_factory=list)
+    source: str = "ClinVar"
+    summary: Optional[str] = None
+    external_evidence_available: bool = False
+    evidence_notice: Optional[str] = None
+    provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
+    raw_evidence: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ProteinEffectResult(BaseModel):
@@ -56,6 +110,17 @@ class ProteinEffectResult(BaseModel):
     loss_of_function_score: float
     affected_domains: List[str]
     explanation: str
+    function_summary: Optional[str] = None
+    mutation_location: Optional[str] = None
+    domain_hit: Optional[str] = None
+    structural_impact_placeholder: str = "AlphaFold structural mapping not yet integrated (TODO)."
+    functional_impact_summary: Optional[str] = None
+    source: str = "UniProt"
+    summary: Optional[str] = None
+    external_evidence_available: bool = False
+    evidence_notice: Optional[str] = None
+    provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
+    raw_evidence: Dict[str, Any] = Field(default_factory=dict)
 
 
 class PathwayNodeState(BaseModel):
@@ -81,6 +146,27 @@ class PathwayResult(BaseModel):
     edges: List[PathwayEdge]
     disrupted_processes: List[str]
     explanation: str
+    selected_gene: Optional[str] = None
+    selected_protein: Optional[str] = None
+    selected_pathway_name: Optional[str] = None
+    selected_pathway_source: Optional[str] = None
+    selected_pathway_id: Optional[str] = None
+    is_generic_fallback: bool = False
+    node_activities: Dict[str, float] = Field(default_factory=dict)
+    baseline_activities: Dict[str, float] = Field(default_factory=dict)
+    changed_nodes: List[str] = Field(default_factory=list)
+    reactome_pathways: List[Dict[str, Any]] = Field(default_factory=list)
+    reactome_participants: List[Dict[str, Any]] = Field(default_factory=list)
+    simulation_model_note: str = "Graph propagation uses simplified simulator assumptions."
+    source: str = "Reactome + Simulator"
+    summary: Optional[str] = None
+    external_evidence_available: bool = False
+    evidence_notice: Optional[str] = None
+    provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
+    raw_evidence: Dict[str, Any] = Field(default_factory=dict)
+    computed_from_gene: Optional[str] = None
+    computed_from_pathway: Optional[str] = None
+    computed_from_protein_activity: Optional[str] = None
 
 
 class CellPhenotypeResult(BaseModel):
@@ -92,6 +178,18 @@ class CellPhenotypeResult(BaseModel):
     genomic_instability: float
     secretion_signal: float
     explanation: str
+    mapping_mode: str = "generic_pathway_traits"
+    pathway_disruption_score: Optional[float] = None
+    functional_loss_score: Optional[float] = None
+    stress_signal: Optional[float] = None
+    survival_signal: Optional[float] = None
+    proliferation_signal: Optional[float] = None
+    repair_or_homeostasis_capacity: Optional[float] = None
+    computed_from_gene: Optional[str] = None
+    computed_from_pathway: Optional[str] = None
+    computed_from_protein_activity: Optional[str] = None
+    source: str = "Cell simulator"
+    provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
 
 
 class PopulationPoint(BaseModel):
@@ -106,6 +204,11 @@ class PopulationResult(BaseModel):
     final_mutated_fraction: float
     clonal_expansion_score: float
     explanation: str
+    computed_from_gene: Optional[str] = None
+    computed_from_pathway: Optional[str] = None
+    computed_from_protein_activity: Optional[str] = None
+    source: str = "Population simulator"
+    provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
 
 
 class EcosystemResult(BaseModel):
@@ -115,10 +218,41 @@ class EcosystemResult(BaseModel):
     nutrient_stress: float
     ecosystem_risk_score: float
     explanation: str
+    computed_from_gene: Optional[str] = None
+    computed_from_pathway: Optional[str] = None
+    computed_from_protein_activity: Optional[str] = None
+    source: str = "Ecosystem simulator"
+    provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
+
+
+class SimulationInputSummary(BaseModel):
+    disease_name: str
+    disease_id: str
+    gene_symbol: str
+    gene_id: Optional[str] = None
+    mutation: str
+    protein_accession: Optional[str] = None
+    pathway_name: Optional[str] = None
+    pathway_id: Optional[str] = None
+    pathway_source: Optional[str] = None
+
+
+class NormalizedEvidence(BaseModel):
+    disease: Dict[str, Any] = Field(default_factory=dict)
+    gene: Dict[str, Any] = Field(default_factory=dict)
+    variant: Dict[str, Any] = Field(default_factory=dict)
+    protein: Dict[str, Any] = Field(default_factory=dict)
+    pathways: List[Dict[str, Any]] = Field(default_factory=list)
+    sources: List[str] = Field(default_factory=list)
+    summaries: Dict[str, str] = Field(default_factory=dict)
+    external_evidence_available: bool = False
+    evidence_notice: Optional[str] = None
+    raw: Dict[str, Any] = Field(default_factory=dict)
 
 
 class SimulationResult(BaseModel):
     request: SimulationRequest
+    simulation_input: SimulationInputSummary
     disease_discovery: DiseaseDiscoveryResult
     selected_candidate: CandidateGene
     mutation_result: MutationResult
@@ -129,3 +263,7 @@ class SimulationResult(BaseModel):
     ecosystem_result: EcosystemResult
     research_summary: str
     citations: List[Dict[str, Any]] = []
+    external_evidence_available: bool = False
+    evidence_notice: Optional[str] = None
+    disclaimer: str = "Research prototype only, not a diagnostic tool."
+    evidence: Optional[NormalizedEvidence] = None

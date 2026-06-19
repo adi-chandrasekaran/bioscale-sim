@@ -6,19 +6,6 @@ const WIDTH = 960;
 const HEIGHT = 280;
 const NODE_RADIUS = 30;
 
-const POSITIONS: Record<string, { x: number; y: number }> = {
-  DNA_DAMAGE: { x: 80, y: 150 },
-  ATM: { x: 220, y: 150 },
-  TP53: { x: 360, y: 150 },
-  MDM2: { x: 360, y: 55 },
-  CDKN1A: { x: 520, y: 85 },
-  BAX: { x: 520, y: 210 },
-  DNA_REPAIR: { x: 520, y: 150 },
-  CELL_CYCLE_ARREST: { x: 700, y: 85 },
-  APOPTOSIS: { x: 700, y: 210 },
-  PROLIFERATION_SIGNAL: { x: 870, y: 150 },
-};
-
 function fmt(value: number) {
   return Number.isFinite(value) ? value.toFixed(2) : "—";
 }
@@ -45,11 +32,27 @@ function trimLink(
 type LayoutNode = NodeState & { x: number; y: number };
 type LayoutEdge = Edge & { x1: number; y1: number; x2: number; y2: number; key: string };
 
+function layerOffset(node: NodeState, index: number, total: number) {
+  const typeOffsets: Record<string, number> = {
+    stress: -35,
+    context: -15,
+    protein: 0,
+    pathway: 10,
+    gene_product: 15,
+    process: 25,
+  };
+  const baseY = HEIGHT / 2 + (typeOffsets[node.type] ?? 0);
+  const spread = (index - (total - 1) / 2) * 12;
+  return baseY + spread;
+}
+
 function buildLayout(nodes: NodeState[], edges: Edge[]): { layoutNodes: LayoutNode[]; layoutEdges: LayoutEdge[] } {
-  const layoutNodes: LayoutNode[] = nodes.map((node) => {
-    const pos = POSITIONS[node.id] ?? { x: 50, y: 50 };
-    return { ...node, x: pos.x, y: pos.y };
-  });
+  const colWidth = nodes.length > 1 ? (WIDTH - 160) / (nodes.length - 1) : 0;
+  const layoutNodes: LayoutNode[] = nodes.map((node, index) => ({
+    ...node,
+    x: nodes.length === 1 ? WIDTH / 2 : 80 + index * colWidth,
+    y: layerOffset(node, index, nodes.length),
+  }));
   const nodeById = Object.fromEntries(layoutNodes.map((n) => [n.id, n]));
 
   const layoutEdges: LayoutEdge[] = edges
