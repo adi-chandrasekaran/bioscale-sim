@@ -103,6 +103,26 @@ curl -X POST http://localhost:8000/api/simulate \
   -d '{"disease":"cancer","gene":"TP53","mutation":"p.R175H","steps":60,"initial_mutated_fraction":0.02}'
 ```
 
+## AI chatbot
+
+The in-app `Ask AI` drawer is backed by the backend `/api/ai/chat` endpoint and uses a local Ollama model.
+
+To enable it locally, install Ollama, start it, and pull a model:
+
+```bash
+ollama serve
+ollama pull llama3.2
+```
+
+Then create `backend/.env` from `backend/.env.example` and use:
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+```
+
+The backend auto-loads `backend/.env`, `backend/.env.local`, `.env`, and `.env.local` on startup.
+
 ## Research angle
 
 Possible paper title:

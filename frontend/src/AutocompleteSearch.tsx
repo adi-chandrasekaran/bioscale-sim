@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { SearchResponse, SelectedEntity } from "./types";
+import { InfoTooltip } from "./Help";
+import type { FieldHelp } from "./helpContent";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 type AutocompleteSearchProps = {
   label: string;
+  help?: FieldHelp;
   placeholder: string;
   endpoint: string;
   extraParams?: Record<string, string>;
@@ -25,6 +28,7 @@ export function AutocompleteSearch({
   initialQuery = "",
   disabled = false,
   allowFreeText = false,
+  help,
 }: AutocompleteSearchProps) {
   const [query, setQuery] = useState(value?.label ?? initialQuery);
   const [results, setResults] = useState<SearchResponse["results"]>([]);
@@ -82,7 +86,10 @@ export function AutocompleteSearch({
 
   return (
     <div className="autocompleteWrap" ref={wrapRef}>
-      <label>{label}</label>
+      <div className="fieldLabelRow">
+        <label>{label}</label>
+        {help && <InfoTooltip label={label} help={help} />}
+      </div>
       <input
         type="text"
         value={query}

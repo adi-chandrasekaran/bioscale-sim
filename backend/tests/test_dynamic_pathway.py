@@ -85,6 +85,27 @@ def test_tp53_demo_still_uses_p53_pathway_when_selected():
     assert source == "Local curated p53 demo model"
 
 
+def test_external_candidates_are_merged_with_local_disease_gene_set():
+    local_kb = load_knowledge_base()
+    kb = build_simulation_kb(
+        local_kb,
+        "EFO_0000311",
+        "cancer",
+        None,
+        "TP53",
+        "p.R175H",
+        {"available": True, "candidates": [{"symbol": "TP53", "score": 0.95}]},
+        {"available": False},
+        {"available": True, "accession": "P04637", "protein_name": "p53", "domains": []},
+        {"available": False},
+    )
+
+    genes = kb["diseases"]["selected_disease"]["known_genes"]
+    assert len(genes) == 10
+    assert "TP53" in genes
+    assert "BRCA1" in genes
+
+
 def test_card5_changes_when_pathway_output_changes():
     local_kb = load_knowledge_base()
 

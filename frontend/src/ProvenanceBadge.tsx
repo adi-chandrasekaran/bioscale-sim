@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import type { ProvenanceCategory, ProvenanceEntry } from "./types";
+import { InfoTooltip } from "./Help";
+import type { TooltipHelp } from "./helpContent";
 
 const CATEGORY_LABELS: Record<ProvenanceCategory, string> = {
   external_database: "External database evidence",
@@ -44,13 +46,17 @@ type ProvenanceRowProps = {
   label: string;
   value: ReactNode;
   provenance?: ProvenanceEntry;
+  help?: TooltipHelp;
 };
 
-export function ProvenanceRow({ label, value, provenance }: ProvenanceRowProps) {
+export function ProvenanceRow({ label, value, provenance, help }: ProvenanceRowProps) {
   return (
     <div className="provenanceRow">
       <div className="provenanceRowMain">
-        <span className="provenanceRowLabel">{label}</span>
+        <span className="provenanceRowLabel">
+          {label}
+          {help && <InfoTooltip label={label} help={help} />}
+        </span>
         <span className="provenanceRowValue">{value}</span>
       </div>
       {provenance && <ProvenanceBadge entry={provenance} compact />}

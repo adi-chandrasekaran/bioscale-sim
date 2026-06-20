@@ -1,0 +1,663 @@
+{
+  "panels": {
+    "simulationInput": {
+      "title": "Simulation input",
+      "summary": "Choose the disease, gene, variant, optional pathway, and run settings that drive the full simulation.",
+      "details": [
+        "Changing any input should update every downstream panel.",
+        "The disease field sets the biological context, the gene and variant define the molecular trigger, and the pathway field narrows pathway context when needed.",
+        "Use external databases when you want live evidence-backed results; disable them if you want the local fallback model."
+      ]
+    },
+    "diseaseDiscovery": {
+      "title": "Disease discovery",
+      "summary": "Ranks disease-linked genes and explains why the leading candidate is selected.",
+      "details": [
+        "This panel maps the selected disease to likely genes using external evidence when available.",
+        "Each gene card shows the gene's function, its disease link, and why it ranks highly."
+      ]
+    },
+    "mutationEngine": {
+      "title": "Mutation engine",
+      "summary": "Interprets the variant text and turns it into a mutation type the simulator can use.",
+      "details": [
+        "HGVS-like text, RS IDs, and typed variants are normalized here.",
+        "If the gene and variant are incompatible, the app should surface that as an invalid combination instead of failing."
+      ]
+    },
+    "proteinEffect": {
+      "title": "Protein effect",
+      "summary": "Estimates how the variant changes protein activity, stability, and binding.",
+      "details": [
+        "This is where structural and functional impact are approximated, including AlphaFold-style structural context.",
+        "The card summarizes the remaining activity and the likely loss of function."
+      ]
+    },
+    "pathwaySimulator": {
+      "title": "Pathway simulator",
+      "summary": "Propagates the gene effect through a pathway graph and marks the processes that shift.",
+      "details": [
+        "This panel shows how a single gene change can move through connected biological pathways.",
+        "Each bubble explains what the node does, how it changes, and how it affects the rest of the pathway."
+      ]
+    },
+    "cellPhenotype": {
+      "title": "Cell phenotype",
+      "summary": "Converts pathway disruption into cell-level behavior such as proliferation, repair, and apoptosis.",
+      "details": [
+        "This panel shows what the altered cell is likely doing: dividing more, repairing less, or resisting death.",
+        "The visual anatomy is meant to make the state changes readable at a glance."
+      ]
+    },
+    "populationDynamics": {
+      "title": "Population dynamics",
+      "summary": "Projects whether the altered cell state stays rare or expands across a population.",
+      "details": [
+        "This panel turns the one-cell story into a clone-growth story over time.",
+        "Use it to see whether the mutated fraction remains small or starts to expand."
+      ]
+    },
+    "ecosystemBehavior": {
+      "title": "Ecosystem behavior",
+      "summary": "Places the simulated disease into a larger tissue or body-site context and highlights the affected organs or regions.",
+      "details": [
+        "This panel should reflect the actual body parts or tissues involved in the selected disease, not an abstract middle layer.",
+        "It can show a single site or a multi-site pattern when the disease implies several linked tissues."
+      ]
+    },
+    "researchSummary": {
+      "title": "Research summary",
+      "summary": "Compresses the full simulation into a short readout with the key disease, gene, variant, and risk values.",
+      "details": [
+        "This panel is the final human-readable summary for the run.",
+        "It should be quick to scan and consistent with the detailed panels above."
+      ]
+    }
+  },
+  "fields": {
+    "disease": {
+      "summary": "Search for the disease, syndrome, or cancer context you want the simulator to model.",
+      "details": [
+        "This is the clinical or biological context that anchors the rest of the simulation.",
+        "Changing the disease should change the candidate genes, pathway context, cell phenotype, and tissue-level model."
+      ],
+      "examples": [
+        "cancer",
+        "liver cancer",
+        "hereditary nonpolyposis colon cancer"
+      ]
+    },
+    "gene": {
+      "summary": "Search for the gene symbol that drives the simulation.",
+      "details": [
+        "The selected gene is the molecular starting point for the protein, pathway, cell, population, and ecosystem layers.",
+        "If the disease and gene do not fit together, the simulator should treat the combination as invalid."
+      ],
+      "examples": [
+        "TP53",
+        "BRCA1",
+        "KRAS"
+      ]
+    },
+    "mutation": {
+      "summary": "Enter the mutation or variant notation to map onto the gene.",
+      "details": [
+        "The app interprets the typed variant, figures out the variant class, and then applies that interpretation to the model.",
+        "Missense changes one amino acid, nonsense introduces a stop codon, frameshift shifts the reading frame, and synonymous leaves the amino acid unchanged."
+      ],
+      "examples": [
+        "p.R175H",
+        "c.5946delT",
+        "V600E",
+        "rs121913343"
+      ]
+    },
+    "pathway": {
+      "summary": "Optionally filter the pathway search to a specific Reactome pathway for the selected gene.",
+      "details": [
+        "This field narrows the pathway context without changing the disease or gene selection.",
+        "Leave it empty if you want the simulator to infer the most relevant pathway from the evidence."
+      ],
+      "examples": [
+        "p53 DNA damage response pathway",
+        "DNA repair",
+        "cell cycle"
+      ]
+    },
+    "steps": {
+      "summary": "Set how many time steps the downstream simulations should run.",
+      "details": [
+        "More steps give the population and ecosystem layers more room to diverge over time.",
+        "Fewer steps keep the run faster and the trajectory shorter."
+      ],
+      "examples": [
+        "60",
+        "120",
+        "240"
+      ]
+    },
+    "useExternalDatabases": {
+      "summary": "Toggle live evidence sources on or off.",
+      "details": [
+        "On means the app should prefer live Open Targets, ClinVar, Reactome, and UniProt evidence.",
+        "Off means the simulator should use the local curated fallback model."
+      ],
+      "examples": [
+        "On for live Open Targets, ClinVar, Reactome, and UniProt evidence",
+        "Off for the local fallback model"
+      ]
+    }
+  },
+  "definitions": {
+    "variant": {
+      "summary": "A variant is a change in the DNA or RNA sequence linked to the selected gene. The current class can be missense, nonsense, frameshift, deletion, insertion, duplication, or splice-site change.",
+      "details": [
+        "The class matters because it changes how strongly the simulator expects the protein to be altered.",
+        "If the selected gene and variant do not match the same biological object, the app should say invalid combination."
+      ],
+      "examples": [
+        "p.R175H",
+        "c.5946delT",
+        "V600E"
+      ]
+    },
+    "aminoAcidChange": {
+      "summary": "Amino acid change means the specific residue-level substitution implied by the variant. It shows exactly which residue changed, such as R→H at position 175.",
+      "details": [
+        "This tells the user which amino acid was present first and what it became after the mutation.",
+        "If the notation does not change the amino acid directly, explain that the protein-level effect is inferred from the coding change."
+      ],
+      "examples": [
+        "R→H at position 175",
+        "V→E at position 600"
+      ]
+    },
+    "clinvarClassification": {
+      "summary": "ClinVar classification summarizes how the variant has been interpreted in clinical databases. Explain the range of possible classifications and what the current one means.",
+      "details": [
+        "Common labels include pathogenic, likely pathogenic, uncertain significance, likely benign, benign, and unknown.",
+        "Pathogenic and likely pathogenic suggest stronger disease relevance, while uncertain significance means the evidence is still incomplete."
+      ],
+      "examples": [
+        "pathogenic",
+        "likely pathogenic",
+        "uncertain significance",
+        "benign"
+      ]
+    },
+    "protein": {
+      "summary": "Protein is the translated molecule produced by the gene. It is the molecule doing the work that the gene encodes, and the simulation shows how the mutation changes that work.",
+      "details": [
+        "This is the molecular machine or regulator whose activity is being changed by the mutation.",
+        "Use the current protein summary to explain the real biological role of the selected protein."
+      ],
+      "examples": [
+        "TP53 / p53 tumor suppressor",
+        "BRCA1 DNA repair protein"
+      ]
+    },
+    "domainHit": {
+      "summary": "A domain hit means the variant lands in a functional region of the protein rather than a random part of the sequence. Explain what that domain does and why it matters.",
+      "details": [
+        "Domains are compact functional regions such as DNA-binding regions, kinase domains, catalytic domains, or interaction motifs.",
+        "A hit in a key domain can have a larger effect than a change in a less constrained region."
+      ],
+      "examples": [
+        "DNA-binding domain",
+        "BRCT domain",
+        "kinase domain"
+      ]
+    },
+    "selectedReactomePathway": {
+      "summary": "Selected Reactome pathway is the pathway specifically chosen for the run. If one is not selected, the simulator may infer the most relevant pathway from the gene and disease context.",
+      "details": [
+        "This label tells the user which Reactome pathway is being used to drive the pathway graph.",
+        "It helps distinguish live pathway evidence from the simulator-generated fallback pathway."
+      ],
+      "examples": [
+        "p53 DNA damage response pathway",
+        "DNA repair",
+        "cell cycle"
+      ]
+    },
+    "candidateGene": {
+      "summary": "A ranked gene is one that is linked to the selected disease and shows a strong biological fit for the run.",
+      "details": [
+        "The card should show the gene summary, the ranking score, and the evidence reason in plain language.",
+        "Hovering the candidate should give a short readable definition, not only a numeric score."
+      ],
+      "examples": [
+        "TP53",
+        "BRCA1",
+        "MSH2"
+      ]
+    },
+    "pathwayNode": {
+      "summary": "A pathway node is one step in the pathway graph. It can be the gene, a downstream process, a pathway bridge, or a disease-context node.",
+      "details": [
+        "Gene/protein nodes represent the direct molecular target.",
+        "Process nodes represent downstream steps that summarize biological activity in the model."
+      ],
+      "examples": [
+        "input signal",
+        "disease context",
+        "cell outcome"
+      ]
+    },
+    "remainingActivity": {
+      "summary": "Remaining activity shows how much of the protein's modelled function is left after the mutation. The value is a normalized model score from 0.00 to 1.00, not a literal laboratory percentage.",
+      "details": [
+        "0.30 means the model is treating the protein as having about 30% of its baseline activity remaining.",
+        "1.00 means no modeled loss; 0.00 means the model predicts full loss in this simplified scale."
+      ],
+      "examples": [
+        "0.30 = substantial reduction",
+        "0.80 = mild reduction"
+      ]
+    },
+    "remainingStability": {
+      "summary": "Remaining stability shows how structurally stable the protein is after the mutation. It is a 0.00 to 1.00 normalized score, not a raw assay percent.",
+      "details": [
+        "A lower score means the model expects the protein to be less stable or easier to misfold.",
+        "0.30 means about 30% of the model's stability capacity remains."
+      ],
+      "examples": [
+        "0.30 = unstable",
+        "0.80 = mostly stable"
+      ]
+    },
+    "remainingBinding": {
+      "summary": "Remaining binding shows how much binding capacity is left for partners, DNA, or cofactors. The score runs from 0.00 to 1.00 as a normalized model output.",
+      "details": [
+        "Lower values mean the variant is likely to weaken interaction with key partners.",
+        "0.30 means about 30% of the modeled binding capacity remains."
+      ],
+      "examples": [
+        "0.30 = weakened binding",
+        "0.90 = close to baseline"
+      ]
+    },
+    "lossOfFunctionScore": {
+      "summary": "Loss-of-function score estimates how strongly the mutation damages the protein's normal role. It is a normalized 0.00 to 1.00 score, where higher means more loss.",
+      "details": [
+        "This is the inverse of remaining function: higher loss-of-function means a stronger impact.",
+        "0.70 means the simulator thinks the protein has lost much of its normal behavior, while 0.20 means only a modest effect."
+      ],
+      "examples": [
+        "0.20 = modest loss",
+        "0.70 = strong loss"
+      ]
+    },
+    "proliferation": {
+      "summary": "Proliferation is the model's estimate of how strongly the cell keeps dividing. It is a normalized 0.00 to 1.00 score, where higher means more division pressure.",
+      "details": [
+        "0.30 means the cell is modeling low proliferative drive compared with baseline.",
+        "1.00 means the model is pushing the cell toward maximal growth pressure in the current scale."
+      ],
+      "examples": [
+        "0.30 = low proliferation",
+        "1.00 = high proliferation"
+      ]
+    },
+    "apoptosis": {
+      "summary": "Apoptosis is the model's estimate of programmed cell death activity. It is normalized from 0.00 to 1.00, where higher means more cell death tendency.",
+      "details": [
+        "0.30 means the model expects apoptosis to be partially reduced or partially active depending on context.",
+        "1.00 means the model is strongly favoring cell death signaling."
+      ],
+      "examples": [
+        "0.30 = low-to-moderate apoptosis",
+        "1.00 = high apoptosis"
+      ]
+    },
+    "repairCapacity": {
+      "summary": "Repair capacity measures how well the cell can fix damage in the current model. It is a normalized score from 0.00 to 1.00.",
+      "details": [
+        "0.30 means the model thinks repair ability is substantially reduced compared with baseline.",
+        "1.00 means repair capacity is effectively intact in the simplified simulator."
+      ],
+      "examples": [
+        "0.30 = poor repair",
+        "0.90 = strong repair"
+      ]
+    },
+    "genomicInstability": {
+      "summary": "Genomic instability measures how error-prone the cell is becoming. It is a normalized 0.00 to 1.00 score, where higher means greater instability.",
+      "details": [
+        "0.30 means the model is showing some instability but not a full collapse of genomic control.",
+        "1.00 means the simulation is treating the genome as highly unstable in this simplified scale."
+      ],
+      "examples": [
+        "0.30 = mild instability",
+        "1.00 = severe instability"
+      ]
+    },
+    "finalMutatedFraction": {
+      "summary": "Final mutated fraction is the share of the simulated population that is mutated at the end of the run. It is a normalized fraction from 0.00 to 1.00, not a percent you must manually convert.",
+      "details": [
+        "0.30 means roughly 30% of the simulated cells are mutated by the end of the run.",
+        "1.00 means the entire modeled population has become mutated in this simplified projection."
+      ],
+      "examples": [
+        "0.30 = 30% mutated",
+        "0.60 = 60% mutated"
+      ]
+    },
+    "clonalExpansionScore": {
+      "summary": "Clonal expansion score measures how strongly the mutated clone is expanding across the population. It is a 0.00 to 1.00 normalized model score.",
+      "details": [
+        "0.30 means the clone is growing, but not aggressively, in the simulator.",
+        "1.00 means the model is strongly favoring rapid clonal expansion."
+      ],
+      "examples": [
+        "0.30 = limited expansion",
+        "0.90 = strong expansion"
+      ]
+    },
+    "tumorLikeBurden": {
+      "summary": "Tumor-like burden estimates how much disease-like mass or burden is present in the tissue context. It is a normalized 0.00 to 1.00 score.",
+      "details": [
+        "0.30 means the tissue is showing a moderate amount of tumor-like burden in the model.",
+        "1.00 means the simulator is treating the burden as very high in the current scale."
+      ],
+      "examples": [
+        "0.30 = moderate burden",
+        "0.90 = high burden"
+      ]
+    },
+    "immuneClearance": {
+      "summary": "Immune clearance estimates how well the immune system is removing the disease burden. It is normalized from 0.00 to 1.00, where higher means better clearance.",
+      "details": [
+        "0.30 means immune removal is weak or only partially effective in the current model.",
+        "1.00 means immune clearance is modeled as very strong."
+      ],
+      "examples": [
+        "0.30 = weak clearance",
+        "0.90 = strong clearance"
+      ]
+    },
+    "inflammation": {
+      "summary": "Inflammation measures how much inflammatory pressure the tissue is under. It is a normalized 0.00 to 1.00 score.",
+      "details": [
+        "0.30 means the model is showing modest inflammation.",
+        "1.00 means inflammation is maximized in the simplified ecosystem scale."
+      ],
+      "examples": [
+        "0.30 = mild inflammation",
+        "0.80 = strong inflammation"
+      ]
+    },
+    "ecosystemRisk": {
+      "summary": "Ecosystem risk combines the tissue, immune, and disease context into a single risk estimate. It is normalized from 0.00 to 1.00.",
+      "details": [
+        "0.30 means the model considers the broader tissue environment to be at a moderate risk level.",
+        "1.00 means the ecosystem layer is modeling very high overall risk."
+      ],
+      "examples": [
+        "0.30 = moderate risk",
+        "0.90 = high risk"
+      ]
+    }
+  },
+  "metrics": {
+    "remainingActivity": {
+      "summary": "Remaining activity shows how much of the protein's modelled function is left after the mutation. The value is a normalized model score from 0.00 to 1.00, not a literal laboratory percentage.",
+      "details": [
+        "0.30 means the model is treating the protein as having about 30% of its baseline activity remaining.",
+        "1.00 means no modeled loss; 0.00 means the model predicts full loss in this simplified scale."
+      ],
+      "examples": [
+        "0.30 = substantial reduction",
+        "0.80 = mild reduction"
+      ]
+    },
+    "remainingStability": {
+      "summary": "Remaining stability shows how structurally stable the protein is after the mutation. It is a 0.00 to 1.00 normalized score, not a raw assay percent.",
+      "details": [
+        "A lower score means the model expects the protein to be less stable or easier to misfold.",
+        "0.30 means about 30% of the model's stability capacity remains."
+      ],
+      "examples": [
+        "0.30 = unstable",
+        "0.80 = mostly stable"
+      ]
+    },
+    "remainingBinding": {
+      "summary": "Remaining binding shows how much binding capacity is left for partners, DNA, or cofactors. The score runs from 0.00 to 1.00 as a normalized model output.",
+      "details": [
+        "Lower values mean the variant is likely to weaken interaction with key partners.",
+        "0.30 means about 30% of the modeled binding capacity remains."
+      ],
+      "examples": [
+        "0.30 = weakened binding",
+        "0.90 = close to baseline"
+      ]
+    },
+    "lossOfFunctionScore": {
+      "summary": "Loss-of-function score estimates how strongly the mutation damages the protein's normal role. It is a normalized 0.00 to 1.00 score, where higher means more loss.",
+      "details": [
+        "This is the inverse of remaining function: higher loss-of-function means a stronger impact.",
+        "0.70 means the simulator thinks the protein has lost much of its normal behavior, while 0.20 means only a modest effect."
+      ],
+      "examples": [
+        "0.20 = modest loss",
+        "0.70 = strong loss"
+      ]
+    },
+    "proliferation": {
+      "summary": "Proliferation is the model's estimate of how strongly the cell keeps dividing. It is a normalized 0.00 to 1.00 score, where higher means more division pressure.",
+      "details": [
+        "0.30 means the cell is modeling low proliferative drive compared with baseline.",
+        "1.00 means the model is pushing the cell toward maximal growth pressure in the current scale."
+      ],
+      "examples": [
+        "0.30 = low proliferation",
+        "1.00 = high proliferation"
+      ]
+    },
+    "apoptosis": {
+      "summary": "Apoptosis is the model's estimate of programmed cell death activity. It is normalized from 0.00 to 1.00, where higher means more cell death tendency.",
+      "details": [
+        "0.30 means the model expects apoptosis to be partially reduced or partially active depending on context.",
+        "1.00 means the model is strongly favoring cell death signaling."
+      ],
+      "examples": [
+        "0.30 = low-to-moderate apoptosis",
+        "1.00 = high apoptosis"
+      ]
+    },
+    "repairCapacity": {
+      "summary": "Repair capacity measures how well the cell can fix damage in the current model. It is a normalized score from 0.00 to 1.00.",
+      "details": [
+        "0.30 means the model thinks repair ability is substantially reduced compared with baseline.",
+        "1.00 means repair capacity is effectively intact in the simplified simulator."
+      ],
+      "examples": [
+        "0.30 = poor repair",
+        "0.90 = strong repair"
+      ]
+    },
+    "genomicInstability": {
+      "summary": "Genomic instability measures how error-prone the cell is becoming. It is a normalized 0.00 to 1.00 score, where higher means greater instability.",
+      "details": [
+        "0.30 means the model is showing some instability but not a full collapse of genomic control.",
+        "1.00 means the simulation is treating the genome as highly unstable in this simplified scale."
+      ],
+      "examples": [
+        "0.30 = mild instability",
+        "1.00 = severe instability"
+      ]
+    },
+    "finalMutatedFraction": {
+      "summary": "Final mutated fraction is the share of the simulated population that is mutated at the end of the run. It is a normalized fraction from 0.00 to 1.00, not a percent you must manually convert.",
+      "details": [
+        "0.30 means roughly 30% of the simulated cells are mutated by the end of the run.",
+        "1.00 means the entire modeled population has become mutated in this simplified projection."
+      ],
+      "examples": [
+        "0.30 = 30% mutated",
+        "0.60 = 60% mutated"
+      ]
+    },
+    "clonalExpansionScore": {
+      "summary": "Clonal expansion score measures how strongly the mutated clone is expanding across the population. It is a 0.00 to 1.00 normalized model score.",
+      "details": [
+        "0.30 means the clone is growing, but not aggressively, in the simulator.",
+        "1.00 means the model is strongly favoring rapid clonal expansion."
+      ],
+      "examples": [
+        "0.30 = limited expansion",
+        "0.90 = strong expansion"
+      ]
+    },
+    "tumorLikeBurden": {
+      "summary": "Tumor-like burden estimates how much disease-like mass or burden is present in the tissue context. It is a normalized 0.00 to 1.00 score.",
+      "details": [
+        "0.30 means the tissue is showing a moderate amount of tumor-like burden in the model.",
+        "1.00 means the simulator is treating the burden as very high in the current scale."
+      ],
+      "examples": [
+        "0.30 = moderate burden",
+        "0.90 = high burden"
+      ]
+    },
+    "immuneClearance": {
+      "summary": "Immune clearance estimates how well the immune system is removing the disease burden. It is normalized from 0.00 to 1.00, where higher means better clearance.",
+      "details": [
+        "0.30 means immune removal is weak or only partially effective in the current model.",
+        "1.00 means immune clearance is modeled as very strong."
+      ],
+      "examples": [
+        "0.30 = weak clearance",
+        "0.90 = strong clearance"
+      ]
+    },
+    "inflammation": {
+      "summary": "Inflammation measures how much inflammatory pressure the tissue is under. It is a normalized 0.00 to 1.00 score.",
+      "details": [
+        "0.30 means the model is showing modest inflammation.",
+        "1.00 means inflammation is maximized in the simplified ecosystem scale."
+      ],
+      "examples": [
+        "0.30 = mild inflammation",
+        "0.80 = strong inflammation"
+      ]
+    },
+    "ecosystemRisk": {
+      "summary": "Ecosystem risk combines the tissue, immune, and disease context into a single risk estimate. It is normalized from 0.00 to 1.00.",
+      "details": [
+        "0.30 means the model considers the broader tissue environment to be at a moderate risk level.",
+        "1.00 means the ecosystem layer is modeling very high overall risk."
+      ],
+      "examples": [
+        "0.30 = moderate risk",
+        "0.90 = high risk"
+      ]
+    }
+  },
+  "mutationKinds": {
+    "missense": {
+      "summary": "Missense variants change one amino acid for another. The simulator should call this out whenever the notation changes a single residue in the protein.",
+      "details": [
+        "Missense variants often affect function without removing the whole protein.",
+        "The current mutation should be described as the exact residue change when possible."
+      ],
+      "examples": [
+        "p.R175H",
+        "p.V600E"
+      ]
+    },
+    "nonsense": {
+      "summary": "Nonsense variants create a premature stop codon and usually shorten the protein.",
+      "details": [
+        "This often removes important domains from the protein.",
+        "This usually means the protein is truncated early."
+      ],
+      "examples": [
+        "p.R213*",
+        "p.Q61*"
+      ]
+    },
+    "frameshift": {
+      "summary": "Frameshift variants change the reading frame and alter many amino acids downstream.",
+      "details": [
+        "These variants often produce a very different or truncated protein sequence.",
+        "They can have a larger impact than a single-residue substitution."
+      ],
+      "examples": [
+        "c.5946delT"
+      ]
+    },
+    "splice": {
+      "summary": "Splice-site variants alter how RNA is cut and stitched together before translation.",
+      "details": [
+        "This can remove exons, keep introns, or shift the protein product.",
+        "The effect depends on where the splice change occurs."
+      ],
+      "examples": [
+        "c.IVS2+1G>A"
+      ]
+    },
+    "synonymous": {
+      "summary": "Synonymous variants change the DNA code without changing the amino acid sequence.",
+      "details": [
+        "They can still matter if they affect splicing, expression, or RNA stability.",
+        "In many cases the protein sequence stays unchanged."
+      ],
+      "examples": [
+        "p.Gly12Gly"
+      ]
+    },
+    "inframe": {
+      "summary": "In-frame variants add or remove amino acids without shifting the reading frame.",
+      "details": [
+        "The protein remains in frame, but a short segment is altered.",
+        "The effect depends on whether the changed segment is functionally important."
+      ],
+      "examples": [
+        "p.ΔE746_A750",
+        "in-frame deletion"
+      ]
+    },
+    "deletion": {
+      "summary": "Deletion variants remove DNA or amino-acid sequence from the gene product.",
+      "details": [
+        "The severity depends on whether the deletion shifts the reading frame.",
+        "Small deletions may be in-frame; larger ones may be frameshift deletions."
+      ],
+      "examples": [
+        "c.5946delT"
+      ]
+    },
+    "insertion": {
+      "summary": "Insertion variants add extra DNA or amino-acid sequence into the gene product.",
+      "details": [
+        "The effect depends on whether the insertion preserves the reading frame.",
+        "Insertions in important domains can be disruptive even when short."
+      ],
+      "examples": [
+        "c.123_124insA"
+      ]
+    },
+    "duplication": {
+      "summary": "Duplication variants repeat a stretch of DNA or amino-acid sequence.",
+      "details": [
+        "Duplications can preserve the reading frame or shift it depending on length.",
+        "The functional effect depends on where the duplication occurs."
+      ],
+      "examples": [
+        "duplication"
+      ]
+    },
+    "unknown": {
+      "summary": "Unknown variant class means the notation could not be cleanly mapped into a known HGVS-style category.",
+      "details": [
+        "The simulator should still explain what it can infer from the text.",
+        "If the gene and mutation are incompatible, the app should flag that instead of crashing."
+      ],
+      "examples": [
+        "unrecognized text"
+      ]
+    }
+  }
+}

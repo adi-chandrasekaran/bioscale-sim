@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as d3 from "d3";
 import type { Edge, NodeState } from "./types";
+import { buildPathwayNodeHelp } from "./helpContent";
 
 const WIDTH = 960;
 const HEIGHT = 280;
@@ -92,34 +93,88 @@ function appendMarkers(defs: d3.Selection<SVGDefsElement, unknown, null, undefin
   inhibit.append("path").attr("d", "M0,-3L8,0L0,3").attr("fill", "#9c4d4d");
 }
 
-function nodeTooltipHtml(node: LayoutNode) {
-  const deltaSign = node.delta > 0 ? "+" : "";
-  const trend =
-    node.delta < -0.1 ? '<span class="pathwayTooltipTrend down">down</span>'
-    : node.delta > 0.1 ? '<span class="pathwayTooltipTrend up">up</span>'
-    : '<span class="pathwayTooltipTrend neutral">stable</span>';
+function escapeHtml(text: string) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function nodeTooltipHtml(
+  node: LayoutNode,
+  edges: LayoutEdge[],
+  selectedGene?: string,
+  pathwayName?: string,
+  pathwayDescription?: string,
+  geneSummary?: string,
+) {
+  const incoming = edges.filter((edge) => edge.target === node.id);
+  const outgoing = edges.filter((edge) => edge.source === node.id);
+  const help = buildPathwayNodeHelp(
+    node.id,
+    node.type,
+    pathwayName,
+    selectedGene,
+    geneSummary,
+    node.activity,
+    node.baseline,
+    node.delta,
+  );
+  const incomingLine = incoming.length
+    ? `Incoming signals: ${incoming.slice(0, 2).map((edge) => `${edge.source.replaceAll("_", " ")} ${edge.relation === "inhibits" ? "reduces" : "raises"} this node`).join("; ")}.`
+    : "No incoming signal connections were detected.";
+  const outgoingLine = outgoing.length
+    ? `Outgoing signals: ${outgoing.slice(0, 2).map((edge) => `${node.id.replaceAll("_", " ")} ${edge.relation === "inhibits" ? "reduces" : "raises"} ${edge.target.replaceAll("_", " ")}`).join("; ")}.`
+    : "No outgoing signal connections were detected.";
+  const deltaLine = node.delta < -0.1
+    ? "This node is down from baseline."
+    : node.delta > 0.1
+      ? "This node is up from baseline."
+      : "This node is close to its baseline state.";
+  const detailList = [help.summary, deltaLine, ...help.details.slice(0, 2), incomingLine, outgoingLine]
+    .filter(Boolean)
+    .map((line) => `<li>${escapeHtml(line)}</li>`)
+    .join("");
 
   return `
-    <strong>${node.id.replaceAll("_", " ")}</strong>
-    <span class="pathwayTooltipType">${node.type.replaceAll("_", " ")}</span>
+    <strong>${escapeHtml(node.id.replaceAll("_", " "))}</strong>
+    <span class="pathwayTooltipType">${escapeHtml(node.type.replaceAll("_", " "))}</span>
+    <ul class="pathwayTooltipList">${detailList}</ul>
     <dl>
       <div><dt>Activity</dt><dd>${fmt(node.activity)}</dd></div>
       <div><dt>Baseline</dt><dd>${fmt(node.baseline)}</dd></div>
-      <div><dt>Change</dt><dd>${deltaSign}${fmt(node.delta)} ${trend}</dd></div>
+      <div><dt>Change</dt><dd>${node.delta > 0 ? "+" : ""}${fmt(node.delta)} ${node.delta < -0.1 ? '<span class="pathwayTooltipTrend down">down</span>' : node.delta > 0.1 ? '<span class="pathwayTooltipTrend up">up</span>' : '<span class="pathwayTooltipTrend neutral">stable</span>'}</dd></div>
     </dl>
   `;
 }
 
 function edgeTooltipHtml(edge: LayoutEdge) {
-  const verb = edge.relation === "inhibits" ? "inhibits" : "activates";
+  const verb = edge.relation === "inhibits" ? "reduces" : "raises";
+  const relation = edge.relation === "inhibits" ? "inhibitory" : "activating";
   return `
     <strong>${edge.source.replaceAll("_", " ")} → ${edge.target.replaceAll("_", " ")}</strong>
-    <span class="pathwayTooltipType">${verb} · weight ${fmt(edge.weight)}</span>
-    <p class="pathwayTooltipHint">Click to pin this interaction</p>
+    <span class="pathwayTooltipType">${relation} connection</span>
+    <p class="pathwayTooltipHint">${edge.source.replaceAll("_", " ")} ${verb} ${edge.target.replaceAll("_", " ")}. A higher weight means this connection has a stronger effect on the next step.</p>
   `;
 }
 
-export function PathwayGraph({ nodes, edges }: { nodes: NodeState[]; edges: Edge[] }) {
+export function PathwayGraph({
+  nodes,
+  edges,
+  selectedGene,
+  selectedPathwayName,
+  pathwayDescription,
+  selectedGeneSummary,
+}: {
+  nodes: NodeState[];
+  edges: Edge[];
+  selectedGene?: string;
+  selectedPathwayName?: string;
+  pathwayDescription?: string;
+  selectedGeneSummary?: string;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -312,11 +367,11 @@ export function PathwayGraph({ nodes, edges }: { nodes: NodeState[]; edges: Edge
       .on("pointerenter", function (event, d) {
         hoveredNodeId = d.id;
         hoveredEdgeKey = null;
-        showTooltip(nodeTooltipHtml(d), event);
+        showTooltip(nodeTooltipHtml(d, layoutEdges, selectedGene, selectedPathwayName, pathwayDescription, selectedGeneSummary), event);
         applyFocus();
       })
       .on("pointermove", function (event, d) {
-        showTooltip(nodeTooltipHtml(d), event);
+        showTooltip(nodeTooltipHtml(d, layoutEdges, selectedGene, selectedPathwayName, pathwayDescription, selectedGeneSummary), event);
       })
       .on("pointerleave", () => {
         hoveredNodeId = null;
@@ -366,7 +421,7 @@ export function PathwayGraph({ nodes, edges }: { nodes: NodeState[]; edges: Edge
     return () => {
       hideTooltip();
     };
-  }, [nodes, edges]);
+  }, [nodes, edges, selectedGene, selectedPathwayName, pathwayDescription, selectedGeneSummary]);
 
   return (
     <div className="pathwayGraphWrap" ref={wrapRef}>

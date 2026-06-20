@@ -6,6 +6,16 @@ import { PathwayGraph } from "./PathwayGraph";
 import { AutocompleteSearch } from "./AutocompleteSearch";
 import { CardSourceHeader, ProvenanceBadge, ProvenanceRow } from "./ProvenanceBadge";
 import { ConciseSummary, RawEvidence } from "./Summary";
+import { PanelHelpAccordion, InfoTooltip } from "./Help";
+import { AskAIPanel } from "./AskAI";
+import {
+  buildCandidateHelp,
+  buildDefinitionHelp,
+  buildFieldHelp,
+  buildScoreLabelHelp,
+  help,
+  type TooltipHelp,
+} from "./helpContent";
 import {
   CardTabBar,
   CellPhenotypeVisual,
@@ -20,6 +30,36 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 const DEFAULT_DISEASE: SelectedEntity = { id: "EFO_0000311", label: "cancer" };
 const DEFAULT_GENE: SelectedEntity = { id: "TP53", label: "TP53" };
 const DEFAULT_VARIANT: SelectedEntity = { id: "p.R175H", label: "p.R175H", meta: { notation: "p.R175H" } };
+
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("App crashed", error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <main>
+          <div className="errorBoundary">
+            <strong>The simulator crashed while rendering.</strong>
+            <p>{this.state.error.message}</p>
+            <pre>{this.state.error.stack}</pre>
+          </div>
+        </main>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function fmt(value: number) {
   return Number.isFinite(value) ? value.toFixed(2) : "—";
@@ -68,15 +108,21 @@ function ScoreBar({
   label,
   value,
   provenance,
+  help,
 }: {
   label: string;
   value: number;
   provenance?: SimulationResult["protein_effect"]["provenance"][string];
+  help?: TooltipHelp;
 }) {
+  const tooltip = help ?? buildScoreLabelHelp(label, value);
   return (
     <div className="scoreBar">
       <div className="scoreHeader">
-        <span>{label}</span>
+        <span className="scoreHeaderLabel">
+          {label}
+          <InfoTooltip label={label} help={tooltip} />
+        </span>
         <div className="scoreHeaderRight">
           <strong>{fmt(value)}</strong>
           {provenance && <ProvenanceBadge entry={provenance} compact />}
@@ -114,15 +160,20 @@ function LayerCard({
   children,
   className = "",
   footer,
+  helpKey,
 }: {
   title: string;
   children: React.ReactNode;
   className?: string;
   footer?: string;
+  helpKey?: keyof typeof help.panels;
 }) {
   return (
     <section className={`card ${className}`.trim()}>
-      <h2>{title}</h2>
+      <div className="cardTitleRow">
+        <h2>{title}</h2>
+        {helpKey && <PanelHelpAccordion help={help.panels[helpKey]} />}
+      </div>
       {children}
       {footer && <p className="cardFooter">{footer}</p>}
     </section>
@@ -142,7 +193,10 @@ function ComputedFromLine({ gene, pathway, proteinActivity }: { gene?: string; p
 function SimulationInputPanel({ input }: { input: SimulationResult["simulation_input"] }) {
   return (
     <section className="simulationInputPanel">
-      <h3>Current simulation input</h3>
+      <div className="cardTitleRow">
+        <h3>Current simulation input</h3>
+        <PanelHelpAccordion help={help.panels.simulationInput} />
+      </div>
       <div className="simInputGrid">
         <div><span>Disease</span><strong>{input.disease_name}</strong><em>{input.disease_id}</em></div>
         <div><span>Gene</span><strong>{input.gene_symbol}</strong><em>{input.gene_id || "—"}</em></div>
@@ -152,6 +206,44 @@ function SimulationInputPanel({ input }: { input: SimulationResult["simulation_i
         <div><span>Pathway source</span><strong>{input.pathway_source || "—"}</strong></div>
       </div>
     </section>
+  );
+}
+
+function CandidateGeneCard({
+  candidate,
+  active,
+  diseaseName,
+  onSelect,
+}: {
+  candidate: SimulationResult["disease_discovery"]["candidates"][number];
+  active: boolean;
+  diseaseName?: string;
+  onSelect: () => void;
+}) {
+  const tooltip = buildCandidateHelp(candidate, diseaseName);
+  return (
+    <button
+      type="button"
+      className={active ? "candidate selected clickable" : "candidate clickable"}
+      onClick={onSelect}
+    >
+      <div className="candidateMain">
+        <strong>{candidate.symbol}</strong>
+        <span>{fmt(candidate.score)}</span>
+      </div>
+      <ConciseSummary
+        text={candidate.function_summary || candidate.summary || candidate.reasons?.[0] || `${candidate.symbol} is ranked for this disease.`}
+        className="candidateSummary"
+      />
+      <div className="candidateHoverBubble" aria-hidden="true">
+        <strong>{tooltip.title ?? candidate.symbol}</strong>
+        <p>{tooltip.summary}</p>
+        {tooltip.details.slice(0, 2).map((detail) => (
+          <p key={detail}>{detail}</p>
+        ))}
+      </div>
+      <ProvenanceBadge entry={candidate.provenance.score ?? { category: "external_database", source: candidate.source }} compact />
+    </button>
   );
 }
 
@@ -166,6 +258,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
   const [cardViews, setCardViews] = useState<Record<"protein" | "cell" | "population" | "ecosystem", CardViewMode>>({
     protein: "summary",
     cell: "summary",
@@ -174,6 +267,30 @@ function App() {
   });
 
   const activeGene = canonicalGeneSymbol(gene);
+  const diseaseEvidenceSummary =
+    typeof result?.disease_discovery?.summary === "string"
+      ? result.disease_discovery.summary
+      : typeof result?.evidence?.disease?.description === "string"
+        ? result.evidence.disease.description
+        : undefined;
+  const geneEvidenceSummary =
+    typeof result?.selected_candidate?.function_summary === "string"
+      ? result.selected_candidate.function_summary
+      : typeof result?.selected_candidate?.summary === "string"
+        ? result.selected_candidate.summary
+        : typeof result?.protein_effect?.function_summary === "string"
+          ? result.protein_effect.function_summary
+          : typeof result?.evidence?.gene?.summary === "string"
+            ? result.evidence.gene.summary
+            : undefined;
+  const pathwayEvidenceDescription =
+    typeof result?.pathway_result?.description === "string" ? result.pathway_result.description : undefined;
+  const pathwayGeneSummary =
+    typeof result?.protein_effect.function_summary === "string"
+      ? result.protein_effect.function_summary
+      : typeof result?.evidence?.gene?.summary === "string"
+        ? result.evidence.gene.summary
+        : undefined;
   const ready = Boolean(disease && activeGene && variant);
 
   const runSimulation = useCallback(async () => {
@@ -265,6 +382,7 @@ function App() {
       <section className="searchPanel">
         <AutocompleteSearch
           label="Disease"
+          help={buildFieldHelp("disease", { diseaseName: disease?.label, diseaseSummary: diseaseEvidenceSummary })}
           placeholder="e.g. breast cancer, Alzheimer, cystic fibrosis"
           endpoint="/api/search/diseases"
           value={disease}
@@ -274,6 +392,7 @@ function App() {
         />
         <AutocompleteSearch
           label="Gene"
+          help={buildFieldHelp("gene", { geneSymbol: activeGene, geneSummary: geneEvidenceSummary, diseaseName: disease?.label, diseaseSummary: diseaseEvidenceSummary })}
           placeholder="e.g. TP53, BRCA1, KRAS"
           endpoint="/api/search/genes"
           value={gene}
@@ -283,6 +402,7 @@ function App() {
         />
         <AutocompleteSearch
           label="Mutation / variant"
+          help={buildFieldHelp("mutation", { geneSymbol: activeGene, mutationNotation: canonicalMutationNotation(variant), mutationSummary: result?.mutation_result?.summary, diseaseName: disease?.label })}
           placeholder="e.g. p.R175H, V600E, rs121913343"
           endpoint="/api/search/variants"
           extraParams={activeGene ? { gene: activeGene } : {}}
@@ -294,6 +414,7 @@ function App() {
         />
         <AutocompleteSearch
           label="Pathway (optional)"
+          help={buildFieldHelp("pathway", { pathwayName: pathway?.label, pathwaySummary: pathwayEvidenceDescription, selectedPathwayId: pathway?.id, pathwayDescription: pathwayEvidenceDescription })}
           placeholder="Filter Reactome pathways for selected gene"
           endpoint="/api/search/pathways"
           extraParams={activeGene ? { gene: activeGene } : {}}
@@ -303,13 +424,22 @@ function App() {
           allowFreeText
         />
         <div className="field compact">
-          <label>Steps</label>
+          <div className="fieldLabelRow">
+            <label>Steps</label>
+            <InfoTooltip label="Steps" help={buildFieldHelp("steps", { value: steps })} />
+          </div>
           <input type="number" min="5" max="300" value={steps} onChange={(e) => setSteps(Number(e.target.value))} />
         </div>
-        <label className="toggleField">
-          <input type="checkbox" checked={useExternal} onChange={(e) => setUseExternal(e.target.checked)} />
-          Use external databases
-        </label>
+        <div className="field compact">
+          <div className="fieldLabelRow">
+            <label htmlFor="use-external-databases">Use external databases</label>
+            <InfoTooltip label="Use external databases" help={buildFieldHelp("useExternalDatabases")} />
+          </div>
+          <label className="toggleField">
+            <input id="use-external-databases" type="checkbox" checked={useExternal} onChange={(e) => setUseExternal(e.target.checked)} />
+            Use external databases
+          </label>
+        </div>
         <button onClick={() => void runSimulation()} disabled={loading || !ready}>
           {loading ? "Running…" : "Run simulation"}
         </button>
@@ -324,7 +454,7 @@ function App() {
       {result && (
         <div className="grid">
           <SimulationInputPanel input={result.simulation_input} />
-          <LayerCard title="1. Disease discovery → candidate gene" footer="This card ranks disease-linked genes and explains which evidence supports the leading candidate.">
+          <LayerCard title="1. Disease discovery → candidate gene" helpKey="diseaseDiscovery" footer="This card ranks disease-linked genes and explains which evidence supports the leading candidate.">
             <CardSourceHeader
               source={result.disease_discovery.external_evidence_available ? "Open Targets" : "Local fallback"}
               externalAvailable={result.disease_discovery.external_evidence_available}
@@ -334,35 +464,54 @@ function App() {
             <ProvenanceRow label="Disease" value={result.disease_discovery.label} provenance={result.disease_discovery.provenance.label} />
             <div className="candidateList">
               {result.disease_discovery.candidates.slice(0, 10).map((c) => (
-                <button
+                <CandidateGeneCard
                   key={c.symbol}
-                  type="button"
-                  className={c.symbol === activeGene ? "candidate selected clickable" : "candidate clickable"}
-                  onClick={() => {
+                  candidate={c}
+                  active={c.symbol === activeGene}
+                  diseaseName={result.simulation_input.disease_name}
+                  onSelect={() => {
                     setGene(normalizeGeneSelection({ id: c.symbol, label: c.symbol, meta: { symbol: c.symbol } }));
                   }}
-                >
-                  <div className="candidateMain">
-                    <strong>{c.symbol}</strong>
-                    <span>{fmt(c.score)}</span>
-                  </div>
-                  <ConciseSummary text={c.summary || c.reasons[0]} className="candidateSummary" />
-                  <ProvenanceBadge entry={c.provenance.score ?? { category: "external_database", source: c.source }} compact />
-                </button>
+                />
               ))}
             </div>
             <RawEvidence data={result.disease_discovery.raw_evidence} />
           </LayerCard>
 
-          <LayerCard title="2. Mutation engine" footer="This card interprets the chosen variant and translates it into a mutation type the simulator can use.">
+          <LayerCard title="2. Mutation engine" helpKey="mutationEngine" footer="This card interprets the chosen variant and translates it into a mutation type the simulator can use.">
             <CardSourceHeader source={result.mutation_result.source} externalAvailable={result.mutation_result.external_evidence_available} notice={result.mutation_result.evidence_notice} />
             <ConciseSummary text={result.mutation_result.summary} />
-            <ProvenanceRow label="Variant" value={<><strong>{result.mutation_result.gene} {result.mutation_result.mutation}</strong> — {result.mutation_result.kind}</>} provenance={result.mutation_result.provenance.kind} />
+            <ProvenanceRow
+              label="Variant"
+              value={<><strong>{result.mutation_result.gene} {result.mutation_result.mutation}</strong> — {result.mutation_result.kind}</>}
+              provenance={result.mutation_result.provenance.kind}
+                help={buildDefinitionHelp("variant", {
+                geneSymbol: result.mutation_result.gene,
+                mutationNotation: result.mutation_result.mutation,
+                mutationKind: result.mutation_result.kind,
+                mutationSummary: result.mutation_result.summary,
+              })}
+            />
             {result.mutation_result.amino_acid_change && (
-              <ProvenanceRow label="Amino acid change" value={result.mutation_result.amino_acid_change} provenance={result.mutation_result.provenance.clinvar_classification} />
+              <ProvenanceRow
+                label="Amino acid change"
+                value={result.mutation_result.amino_acid_change}
+                provenance={result.mutation_result.provenance.clinvar_classification}
+                help={buildDefinitionHelp("aminoAcidChange", {
+                  aminoAcidChange: result.mutation_result.amino_acid_change,
+                  mutationNotation: result.mutation_result.mutation,
+                })}
+              />
             )}
             {result.mutation_result.clinvar_classification && (
-              <ProvenanceRow label="ClinVar classification" value={result.mutation_result.clinvar_classification} provenance={result.mutation_result.provenance.clinvar_classification} />
+              <ProvenanceRow
+                label="ClinVar classification"
+                value={result.mutation_result.clinvar_classification}
+                provenance={result.mutation_result.provenance.clinvar_classification}
+                help={buildDefinitionHelp("clinvarClassification", {
+                  clinvarClassification: result.mutation_result.clinvar_classification,
+                })}
+              />
             )}
             {result.mutation_result.phenotypes.length > 0 && (
               <ProvenanceRow label="Linked phenotypes" value={result.mutation_result.phenotypes.join("; ")} />
@@ -370,15 +519,30 @@ function App() {
             <RawEvidence data={result.mutation_result.raw_evidence} />
           </LayerCard>
 
-          <LayerCard title="3. Protein effect" className="wide" footer="This card estimates how strongly the mutation changes protein activity, stability, and binding.">
+          <LayerCard title="3. Protein effect" className="wide" helpKey="proteinEffect" footer="This card estimates how strongly the mutation changes protein activity, stability, and binding.">
             <CardTabBar value={cardViews.protein} onChange={(value) => setCardViews((current) => ({ ...current, protein: value }))} visualLabel="AlphaFold" />
             {cardViews.protein === "summary" ? (
               <>
                 <CardSourceHeader source={result.protein_effect.source} externalAvailable={result.protein_effect.external_evidence_available} notice={result.protein_effect.evidence_notice} />
                 <ConciseSummary text={result.protein_effect.summary || result.protein_effect.function_summary} />
-                <ProvenanceRow label="Protein" value={`${result.protein_effect.protein_name} (${result.protein_effect.protein_id})`} provenance={result.protein_effect.provenance.protein_name} />
+                <ProvenanceRow
+                  label="Protein"
+                  value={`${result.protein_effect.protein_name} (${result.protein_effect.protein_id})`}
+                  provenance={result.protein_effect.provenance.protein_name}
+                  help={buildDefinitionHelp("protein", {
+                    proteinName: result.protein_effect.protein_name,
+                    proteinSummary: result.protein_effect.function_summary,
+                  })}
+                />
                 {result.protein_effect.mutation_location && <ProvenanceRow label="Mutation location" value={result.protein_effect.mutation_location} />}
-                {result.protein_effect.domain_hit && <ProvenanceRow label="Domain hit" value={result.protein_effect.domain_hit} provenance={result.protein_effect.provenance.function_summary} />}
+                {result.protein_effect.domain_hit && (
+                  <ProvenanceRow
+                    label="Domain hit"
+                    value={result.protein_effect.domain_hit}
+                    provenance={result.protein_effect.provenance.function_summary}
+                    help={buildDefinitionHelp("domainHit", { domainHit: result.protein_effect.domain_hit })}
+                  />
+                )}
                 <ProvenanceRow label="Structural impact" value={result.protein_effect.structural_impact_placeholder} provenance={result.protein_effect.provenance.structural_impact_placeholder} />
                 <ConciseSummary text={result.protein_effect.functional_impact_summary} />
                 <ScoreBar label="Remaining activity" value={result.protein_effect.activity} provenance={result.protein_effect.provenance.activity} />
@@ -392,7 +556,7 @@ function App() {
             )}
           </LayerCard>
 
-          <LayerCard title="4. Pathway simulator" className="wide" footer="This card propagates the gene effect through a pathway graph and marks the processes that shift.">
+          <LayerCard title="4. Pathway simulator" className="wide" helpKey="pathwaySimulator" footer="This card propagates the gene effect through a pathway graph and marks the processes that shift.">
             <CardSourceHeader source={result.pathway_result.source} externalAvailable={result.pathway_result.external_evidence_available} notice={result.pathway_result.evidence_notice} />
             {result.pathway_result.is_generic_fallback && (
               <p className="evidenceNotice">Generic simulator pathway generated from selected gene evidence; edge weights are model assumptions.</p>
@@ -404,15 +568,31 @@ function App() {
               proteinActivity={result.pathway_result.computed_from_protein_activity}
             />
             {result.pathway_result.selected_pathway_name && (
-              <ProvenanceRow label="Selected Reactome pathway" value={`${result.pathway_result.selected_pathway_name} (${result.pathway_result.selected_pathway_id})`} provenance={result.pathway_result.provenance.reactome_pathways} />
+              <ProvenanceRow
+                label="Selected Reactome pathway"
+                value={`${result.pathway_result.selected_pathway_name} (${result.pathway_result.selected_pathway_id})`}
+                provenance={result.pathway_result.provenance.reactome_pathways}
+                help={buildDefinitionHelp("selectedReactomePathway", {
+                  selectedPathwayName: result.pathway_result.selected_pathway_name,
+                  selectedPathwayId: result.pathway_result.selected_pathway_id,
+                  pathwayDescription: result.pathway_result.description,
+                })}
+              />
             )}
             <p className="muted modelNote">{result.pathway_result.simulation_model_note}</p>
-            <PathwayGraph nodes={result.pathway_result.nodes} edges={result.pathway_result.edges} />
+            <PathwayGraph
+              nodes={result.pathway_result.nodes}
+              edges={result.pathway_result.edges}
+              selectedGene={result.pathway_result.selected_gene}
+              selectedPathwayName={result.pathway_result.selected_pathway_name}
+              pathwayDescription={result.pathway_result.description}
+              selectedGeneSummary={pathwayGeneSummary}
+            />
             <ProvenanceRow label="Disrupted processes" value={result.pathway_result.disrupted_processes.length ? result.pathway_result.disrupted_processes.join("; ") : "No major disruption."} provenance={result.pathway_result.provenance.disrupted_processes} />
             <RawEvidence data={result.pathway_result.raw_evidence} />
           </LayerCard>
 
-          <LayerCard title="5. Cell phenotype" className="wide" footer="This card turns pathway disruption into cell-level behavior such as proliferation, repair, and apoptosis.">
+          <LayerCard title="5. Cell phenotype" className="wide" helpKey="cellPhenotype" footer="This card turns pathway disruption into cell-level behavior such as proliferation, repair, and apoptosis.">
             <CardTabBar value={cardViews.cell} onChange={(value) => setCardViews((current) => ({ ...current, cell: value }))} visualLabel="Model" />
             {cardViews.cell === "summary" ? (
               <>
@@ -436,7 +616,7 @@ function App() {
             )}
           </LayerCard>
 
-          <LayerCard title="6. Population dynamics" className="wide" footer="This card projects whether the altered cell state stays rare or expands across a population.">
+          <LayerCard title="6. Population dynamics" className="wide" helpKey="populationDynamics" footer="This card projects whether the altered cell state stays rare or expands across a population.">
             <CardTabBar value={cardViews.population} onChange={(value) => setCardViews((current) => ({ ...current, population: value }))} visualLabel="Model" />
             {cardViews.population === "summary" ? (
               <>
@@ -457,7 +637,7 @@ function App() {
             )}
           </LayerCard>
 
-          <LayerCard title="7. Ecosystem behavior" className="wide" footer="This card combines cell behavior with immune and tissue context to estimate overall ecosystem risk.">
+          <LayerCard title="7. Ecosystem behavior" className="wide" helpKey="ecosystemBehavior" footer="This card combines cell behavior with immune and tissue context to estimate overall ecosystem risk.">
             <CardTabBar value={cardViews.ecosystem} onChange={(value) => setCardViews((current) => ({ ...current, ecosystem: value }))} visualLabel="Model" />
             {cardViews.ecosystem === "summary" ? (
               <>
@@ -481,7 +661,7 @@ function App() {
             )}
           </LayerCard>
 
-          <LayerCard title="Research summary" className="wide" footer="This card compresses the full run into a single readable summary for quick review.">
+          <LayerCard title="Research summary" className="wide" helpKey="researchSummary" footer="This card compresses the full run into a single readable summary for quick review.">
             <ConciseSummary text={result.research_summary} />
             {result.evidence_notice && <p className="evidenceNotice">{result.evidence_notice}</p>}
             <p className="muted">{result.disclaimer}</p>
@@ -489,8 +669,13 @@ function App() {
           </LayerCard>
         </div>
       )}
+      <AskAIPanel open={aiOpen} onOpenChange={setAiOpen} result={result} />
     </main>
   );
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <AppErrorBoundary>
+    <App />
+  </AppErrorBoundary>,
+);

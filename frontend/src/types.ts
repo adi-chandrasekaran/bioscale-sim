@@ -55,6 +55,7 @@ export type CandidateGene = {
   interactions: string[];
   source: string;
   summary?: string;
+  function_summary?: string;
   provenance: Record<string, ProvenanceEntry>;
 };
 

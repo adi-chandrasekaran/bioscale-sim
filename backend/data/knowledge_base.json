@@ -5,13 +5,18 @@
       "description": "A simplified demo disease model focused on loss of tumor suppression, DNA damage response, apoptosis, and abnormal clonal expansion.",
       "affected_cell_context": "epithelial-like proliferating tissue",
       "known_processes": ["DNA damage response", "cell cycle arrest", "apoptosis", "immune evasion", "clonal expansion"],
-      "known_genes": ["TP53", "MDM2", "CDKN1A", "BAX", "ATM"],
+      "known_genes": ["TP53", "MDM2", "CDKN1A", "BAX", "ATM", "BRCA1", "BRCA2", "KRAS", "EGFR", "PTEN"],
       "candidate_gene_weights": {
         "TP53": 0.98,
         "MDM2": 0.74,
         "CDKN1A": 0.70,
         "BAX": 0.66,
-        "ATM": 0.62
+        "ATM": 0.62,
+        "BRCA1": 0.60,
+        "BRCA2": 0.58,
+        "KRAS": 0.57,
+        "EGFR": 0.55,
+        "PTEN": 0.54
       }
     },
     "neurodegeneration": {
@@ -79,6 +84,51 @@
       "pathways": ["p53_damage_response"],
       "domains": [{"name": "PI3K/PI4K-like kinase domain", "start": 2712, "end": 2962}],
       "interactions": ["TP53"]
+    },
+    "BRCA1": {
+      "name": "BRCA1 DNA repair associated",
+      "function_summary": "A DNA repair protein that preserves genome stability and helps coordinate cell cycle checkpoints after damage.",
+      "protein_id": "P38398",
+      "expressed_in": ["many tissues", "proliferating cells"],
+      "pathways": ["DNA_repair"],
+      "domains": [{"name": "RING finger domain", "start": 1, "end": 100}],
+      "interactions": ["TP53", "BARD1"]
+    },
+    "BRCA2": {
+      "name": "BRCA2 DNA repair associated",
+      "function_summary": "A homologous recombination repair protein that helps maintain chromosome integrity.",
+      "protein_id": "P51587",
+      "expressed_in": ["many tissues", "proliferating cells"],
+      "pathways": ["DNA_repair"],
+      "domains": [{"name": "BRC repeat region", "start": 1000, "end": 2100}],
+      "interactions": ["RAD51"]
+    },
+    "KRAS": {
+      "name": "KRAS proto-oncogene",
+      "function_summary": "A small GTPase that transmits growth signals from receptors to downstream proliferative pathways.",
+      "protein_id": "P01116",
+      "expressed_in": ["many tissues"],
+      "pathways": ["MAPK_signaling"],
+      "domains": [{"name": "GTPase domain", "start": 1, "end": 166}],
+      "interactions": ["EGFR", "TP53"]
+    },
+    "EGFR": {
+      "name": "epidermal growth factor receptor",
+      "function_summary": "A receptor tyrosine kinase that promotes proliferation and survival when activated.",
+      "protein_id": "P00533",
+      "expressed_in": ["epithelial tissues", "many tissues"],
+      "pathways": ["MAPK_signaling"],
+      "domains": [{"name": "extracellular domain", "start": 25, "end": 620}],
+      "interactions": ["KRAS", "PTEN"]
+    },
+    "PTEN": {
+      "name": "PTEN phosphatase",
+      "function_summary": "A tumor suppressor phosphatase that restrains PI3K-AKT signaling and limits growth.",
+      "protein_id": "P60484",
+      "expressed_in": ["many tissues"],
+      "pathways": ["PI3K_AKT_signaling"],
+      "domains": [{"name": "phosphatase domain", "start": 7, "end": 185}],
+      "interactions": ["EGFR", "TP53"]
     }
   },
   "mutations": {

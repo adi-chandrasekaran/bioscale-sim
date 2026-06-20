@@ -33,6 +33,10 @@ def build_simulation_kb(
     kb = copy.deepcopy(local_kb)
     symbol = normalize_gene_symbol(gene_symbol)
     parsed = parse_hgvs_protein(mutation_notation)
+    local_diseases = local_kb.get("diseases", {})
+    disease_lookup_text = f"{disease_id} {disease_name or ''}".lower()
+    fallback_key = next((key for key in local_diseases if key in disease_lookup_text), LOCAL_DISEASE_KEY)
+    base_local_disease = copy.deepcopy(local_diseases.get(fallback_key, local_diseases.get(LOCAL_DISEASE_KEY, {})))
 
     disease = kb.setdefault("diseases", {}).setdefault(LOCAL_DISEASE_KEY, {})
     disease.update(
@@ -40,16 +44,27 @@ def build_simulation_kb(
             "label": disease_name or disease_id,
             "description": strip_citations(disease_description or "")[:400] or f"Selected disease {disease_name}.",
             "affected_cell_context": "database-selected disease context",
-            "known_genes": [],
-            "candidate_gene_weights": {},
+            "known_genes": list(base_local_disease.get("known_genes", [])),
+            "candidate_gene_weights": dict(base_local_disease.get("candidate_gene_weights", {})),
         }
     )
 
     candidates = open_targets.get("candidates", [])
     if candidates:
-        disease["known_genes"] = [c["symbol"] for c in candidates]
-        disease["candidate_gene_weights"] = {c["symbol"]: c["score"] for c in candidates}
-    elif symbol:
+        merged_known_genes: list[str] = []
+        merged_weights = dict(base_local_disease.get("candidate_gene_weights", {}))
+        for candidate in candidates:
+            candidate_symbol = candidate["symbol"]
+            if candidate_symbol not in merged_known_genes:
+                merged_known_genes.append(candidate_symbol)
+            merged_weights[candidate_symbol] = candidate.get("score", merged_weights.get(candidate_symbol, 0.5))
+        for local_symbol in base_local_disease.get("known_genes", []):
+            if local_symbol not in merged_known_genes:
+                merged_known_genes.append(local_symbol)
+            merged_weights.setdefault(local_symbol, base_local_disease.get("candidate_gene_weights", {}).get(local_symbol, 0.5))
+        disease["known_genes"] = merged_known_genes[:10]
+        disease["candidate_gene_weights"] = {symbol_: merged_weights[symbol_] for symbol_ in disease["known_genes"]}
+    elif not disease["known_genes"] and symbol:
         disease["known_genes"] = [symbol]
         disease["candidate_gene_weights"] = {symbol: 0.75}
 

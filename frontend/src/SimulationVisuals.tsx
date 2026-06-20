@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SimulationResult } from "./types";
+import { InfoTooltip } from "./Help";
+import { buildScoreLabelHelp } from "./helpContent";
 
 type ProteinEffectResult = SimulationResult["protein_effect"];
 type CellPhenotypeResult = SimulationResult["cell_phenotype"];
@@ -871,10 +873,14 @@ export function ProteinEffectVisual({ protein }: { protein: ProteinEffectResult 
 }
 
 function MetricGauge({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+  const help = buildScoreLabelHelp(label, value);
   return (
     <div className="metricGauge">
       <div className="metricGaugeTop">
-        <span>{label}</span>
+        <span className="metricGaugeLabel">
+          {label}
+          <InfoTooltip label={label} help={help} />
+        </span>
         <strong>{fmt(value)}</strong>
       </div>
       <div className="barOuter">

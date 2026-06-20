@@ -219,30 +219,66 @@ def _build_discovery(
     ot = evidence.raw.get("open_targets", {})
     disease_name = evidence.disease.get("name") or discovery.label
     candidates: List[CandidateGene] = []
+    local_candidates = {candidate.symbol: candidate for candidate in discovery.candidates}
 
     if ot.get("available"):
+        seen: set[str] = set()
         for row in ot.get("candidates", [])[:10]:
             symbol = row["symbol"]
             score = float(row.get("score") or 0.0)
             summary = summarize_gene_association(symbol, row.get("name") or symbol, score, disease_name)
+            local_candidate = local_candidates.get(symbol)
             candidates.append(
                 CandidateGene(
                     symbol=symbol,
                     score=score,
-                    reasons=[summary],
-                    summary=limit_sentences(summary, 2),
+                    reasons=[
+                        summary,
+                        *(
+                            local_candidate.reasons[:2]
+                            if local_candidate and local_candidate.reasons
+                            else []
+                        ),
+                    ],
+                    summary=limit_sentences(
+                        local_candidate.function_summary
+                        if local_candidate and local_candidate.function_summary
+                        else local_candidate.summary if local_candidate and local_candidate.summary else summary,
+                        2,
+                    ),
+                    function_summary=local_candidate.function_summary if local_candidate and local_candidate.function_summary else local_candidate.summary if local_candidate else summary,
                     source="Open Targets",
                     provenance={
                         "score": _prov("external_database", "Open Targets"),
                         "summary": _prov("external_database", "Open Targets"),
+                        "function_summary": _prov("local_curated" if local_candidate else "external_database", "Local fallback" if local_candidate else "Open Targets"),
                     },
                 )
             )
+            seen.add(symbol)
+        if len(candidates) < 10:
+            for candidate in discovery.candidates:
+                if candidate.symbol in seen:
+                    continue
+                candidates.append(
+                    candidate.model_copy(
+                        update={
+                            "summary": candidate.summary or candidate.function_summary or limit_sentences(candidate.reasons[0] if candidate.reasons else f"{candidate.symbol} candidate", 2),
+                            "function_summary": candidate.function_summary or candidate.summary,
+                            "source": candidate.source or "Local fallback",
+                            "provenance": candidate.provenance or {"score": _prov("local_curated", "Local fallback")},
+                        }
+                    )
+                )
+                seen.add(candidate.symbol)
+                if len(candidates) >= 10:
+                    break
     else:
         candidates = [
             c.model_copy(
                 update={
-                    "summary": limit_sentences(c.reasons[0] if c.reasons else f"{c.symbol} candidate", 2),
+                    "summary": c.summary or c.function_summary or limit_sentences(c.reasons[0] if c.reasons else f"{c.symbol} candidate", 2),
+                    "function_summary": c.function_summary or c.summary,
                     "source": "Local fallback",
                     "provenance": {"score": _prov("local_curated", "Local fallback")},
                 }

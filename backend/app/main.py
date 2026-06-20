@@ -5,8 +5,20 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.models import CandidateGene, NormalizedEvidence, SearchResponse, SearchResultItem, SimulationInputSummary, SimulationRequest, SimulationResult
+from app.models import (
+    AIChatRequest,
+    AIChatResponse,
+    AIStatusResponse,
+    CandidateGene,
+    NormalizedEvidence,
+    SearchResponse,
+    SearchResultItem,
+    SimulationInputSummary,
+    SimulationRequest,
+    SimulationResult,
+)
 from app.services.data_loader import load_knowledge_base
+from app.services.ai_assistant import answer_question, ai_status
 from app.services.evidence_service import fetch_normalized_evidence, run_searchable_pipeline
 from app.services.search_service import (
     search_diseases_endpoint,
@@ -203,3 +215,17 @@ def simulate(req: SimulationRequest) -> SimulationResult:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/ai/chat", response_model=AIChatResponse)
+def ai_chat(req: AIChatRequest) -> AIChatResponse:
+    try:
+        payload = answer_question(req.question, [turn.model_dump() for turn in req.history], req.context)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return AIChatResponse(**payload)
+
+
+@app.get("/api/ai/status", response_model=AIStatusResponse)
+def ai_status_endpoint() -> AIStatusResponse:
+    return AIStatusResponse(**ai_status())

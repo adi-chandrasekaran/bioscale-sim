@@ -29,6 +29,10 @@ def discover_candidate_genes(kb: Dict[str, Any], disease_key: str) -> DiseaseDis
         if symbol in disease.get("candidate_gene_weights", {}):
             reasons.append("Listed as disease-relevant in the local demo knowledge base")
 
+        summary = gene.get("function_summary") or gene.get("name")
+        if not summary and reasons:
+            summary = reasons[0]
+
         candidates.append(
             CandidateGene(
                 symbol=symbol,
@@ -36,6 +40,8 @@ def discover_candidate_genes(kb: Dict[str, Any], disease_key: str) -> DiseaseDis
                 reasons=reasons,
                 pathways=gene.get("pathways", []),
                 interactions=gene.get("interactions", []),
+                summary=summary,
+                function_summary=gene.get("function_summary"),
             )
         )
 

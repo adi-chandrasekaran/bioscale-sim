@@ -35,3 +35,5 @@ backend/cache/
 *.log
 .env
 .env.*
+!.env.example
+!backend/.env.example

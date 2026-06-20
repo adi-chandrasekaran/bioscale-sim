@@ -34,6 +34,30 @@ class SearchResponse(BaseModel):
     error: Optional[str] = None
 
 
+class AIChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class AIChatRequest(BaseModel):
+    question: str = Field(min_length=1)
+    history: List[AIChatTurn] = Field(default_factory=list)
+    context: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AIChatResponse(BaseModel):
+    answer: str
+    provider: str = "fallback"
+    model: Optional[str] = None
+
+
+class AIStatusResponse(BaseModel):
+    configured: bool
+    provider: str
+    model: Optional[str] = None
+    message: str
+
+
 class SimulationRequest(BaseModel):
     disease_id: str = Field(default="EFO_0000311", description="Open Targets disease ID (EFO/MONDO)")
     disease_name: Optional[str] = Field(default="cancer", description="Human-readable disease label")
@@ -60,6 +84,7 @@ class CandidateGene(BaseModel):
     interactions: List[str] = Field(default_factory=list)
     source: str = "Open Targets"
     summary: Optional[str] = None
+    function_summary: Optional[str] = None
     provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
 
 
