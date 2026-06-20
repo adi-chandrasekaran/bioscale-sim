@@ -124,12 +124,71 @@ def test_simulation_pipeline_with_external_evidence_flag():
     assert payload["protein_effect"]["provenance"]["activity"]["category"] == "simulator_assumption"
 
 
-def test_unknown_mutation_gives_400():
+def test_unknown_mutation_simulates_with_generic_fallback():
     response = client.post(
         "/api/simulate",
         json={"disease_id": "EFO_0000311", "gene": "TP53", "mutation": "p.NOPE", "use_external_evidence": False},
     )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["mutation_result"]["mutation"] == "p.NOPE"
+    assert payload["protein_effect"]["protein_id"] is not None
+
+
+def test_non_tp53_gene_and_variant_simulates_locally():
+    response = client.post(
+        "/api/simulate",
+        json={
+            "disease_id": "EFO_0000311",
+            "disease_name": "cancer",
+            "gene": "BRCA1",
+            "mutation": "p.V600E",
+            "steps": 20,
+            "use_external_evidence": False,
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["mutation_result"]["gene"] == "BRCA1"
+    assert payload["protein_effect"]["protein_id"] is not None
+    assert payload["pathway_result"]["selected_gene"] == "BRCA1"
+    assert payload["cell_phenotype"]["computed_from_gene"] == "BRCA1"
+
+
+def test_explicit_gene_mismatch_returns_invalid_combination():
+    response = client.post(
+        "/api/simulate",
+        json={
+            "disease_id": "EFO_0000311",
+            "disease_name": "cancer",
+            "gene": "BRCA1",
+            "mutation": "TP53 p.R175H",
+            "steps": 20,
+            "use_external_evidence": False,
+        },
+    )
     assert response.status_code == 400
+    assert response.json()["detail"] == "invalid combination"
+
+
+def test_coding_variant_produces_inferred_summaries():
+    response = client.post(
+        "/api/simulate",
+        json={
+            "disease_id": "EFO_0000311",
+            "disease_name": "ovarian cancer",
+            "gene": "BRCA2",
+            "mutation": "c.5946delT",
+            "steps": 20,
+            "use_external_evidence": False,
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert "unknown" not in payload["research_summary"].lower()
+    assert "unknown" not in payload["disease_discovery"]["summary"].lower()
+    assert "unknown" not in payload["mutation_result"]["summary"].lower()
+    assert "unknown" not in payload["protein_effect"]["summary"].lower()
 
 
 def test_uniprot_summarizer_not_huge():

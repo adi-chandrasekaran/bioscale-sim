@@ -12,6 +12,7 @@ type AutocompleteSearchProps = {
   onChange: (item: SelectedEntity | null) => void;
   initialQuery?: string;
   disabled?: boolean;
+  allowFreeText?: boolean;
 };
 
 export function AutocompleteSearch({
@@ -23,6 +24,7 @@ export function AutocompleteSearch({
   onChange,
   initialQuery = "",
   disabled = false,
+  allowFreeText = false,
 }: AutocompleteSearchProps) {
   const [query, setQuery] = useState(value?.label ?? initialQuery);
   const [results, setResults] = useState<SearchResponse["results"]>([]);
@@ -30,6 +32,15 @@ export function AutocompleteSearch({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const suppressBlurCommit = useRef(false);
+
+  function commitFreeText() {
+    const trimmed = query.trim();
+    if (!allowFreeText || !trimmed) return;
+    onChange({ id: trimmed, label: trimmed, meta: { freeText: true } });
+    setQuery(trimmed);
+    setOpen(false);
+  }
 
   useEffect(() => {
     if (value) setQuery(value.label);
@@ -61,12 +72,13 @@ export function AutocompleteSearch({
       } catch {
         setError("Search unavailable");
         setResults([]);
+        if (allowFreeText) commitFreeText();
       } finally {
         setLoading(false);
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, endpoint, JSON.stringify(extraParams)]);
+  }, [query, endpoint, JSON.stringify(extraParams), allowFreeText]);
 
   return (
     <div className="autocompleteWrap" ref={wrapRef}>
@@ -81,6 +93,19 @@ export function AutocompleteSearch({
           if (value && e.target.value !== value.label) onChange(null);
         }}
         onFocus={() => query.length >= 2 && setOpen(true)}
+        onBlur={() => {
+          if (suppressBlurCommit.current) {
+            suppressBlurCommit.current = false;
+            return;
+          }
+          commitFreeText();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commitFreeText();
+          }
+        }}
       />
       {loading && <span className="searchStatus">Searching…</span>}
       {value && <span className="selectedChip">{value.label}</span>}
@@ -90,7 +115,8 @@ export function AutocompleteSearch({
             <li key={`${item.id}-${item.label}`}>
               <button
                 type="button"
-                onClick={() => {
+                onMouseDown={() => {
+                  suppressBlurCommit.current = true;
                   onChange({ id: item.id, label: item.label, meta: item.meta });
                   setQuery(item.label);
                   setOpen(false);
@@ -103,6 +129,11 @@ export function AutocompleteSearch({
             </li>
           ))}
         </ul>
+      )}
+      {allowFreeText && !loading && query.trim().length >= 2 && results.length === 0 && !value && (
+        <button type="button" className="freeTextButton" onMouseDown={commitFreeText}>
+          Use typed text: <strong>{query.trim()}</strong>
+        </button>
       )}
       {error && <span className="searchError">{error}</span>}
     </div>

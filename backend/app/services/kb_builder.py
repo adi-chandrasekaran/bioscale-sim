@@ -54,7 +54,7 @@ def build_simulation_kb(
         disease["candidate_gene_weights"] = {symbol: 0.75}
 
     local_gene = local_kb.get("genes", {}).get(symbol, {})
-    protein_id = uniprot.get("accession") or local_gene.get("protein_id")
+    protein_id = uniprot.get("accession") or local_gene.get("protein_id") or f"unknown:{symbol}"
     gene_entry = kb.setdefault("genes", {}).setdefault(symbol, {})
 
     if uniprot.get("available"):

@@ -173,6 +173,23 @@ h1 {
 
 .searchError { color: #9c4d4d; }
 
+.freeTextButton {
+  margin-top: 2px;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #237457;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.freeTextButton strong {
+  text-decoration: underline;
+}
+
 .selectedChip {
   font-size: 11px;
   font-weight: 800;
@@ -361,13 +378,26 @@ button:disabled { opacity: 0.55; cursor: wait; }
   border-radius: 24px;
   padding: 22px;
   box-shadow: 0 14px 38px rgba(18, 32, 29, 0.055);
+  display: flex;
+  flex-direction: column;
 }
-.card:nth-child(4), .card:nth-child(6), .card:nth-child(8) { grid-column: 1 / -1; }
+.card.wide {
+  grid-column: 1 / -1;
+}
 
 h2 {
   margin: 0 0 14px;
   font-size: 21px;
   letter-spacing: -0.03em;
+}
+
+.cardFooter {
+  margin: 18px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #e2ece5;
+  color: #64746f;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 p { color: #2c3b37; line-height: 1.58; }
@@ -691,7 +721,7 @@ p { color: #2c3b37; line-height: 1.58; }
 
 @media (max-width: 900px) {
   .hero, .grid, .controlPanel, .searchPanel, .twoCols { grid-template-columns: 1fr; }
-  .card:nth-child(4), .card:nth-child(6), .card:nth-child(8) { grid-column: auto; }
+  .card.wide { grid-column: auto; }
 }
 
 /* Make all main simulator cards the same width */

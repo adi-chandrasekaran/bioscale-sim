@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-import copy
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.adapters.clinvar import safe_fetch_variant_evidence
 from app.adapters.open_targets import safe_fetch_disease_targets_by_id
 from app.adapters.reactome import safe_fetch_pathway_evidence
 from app.adapters.uniprot import safe_fetch_protein_evidence
-from app.adapters.normalizer import amino_acid_change_text, normalize_gene_symbol, parse_hgvs_protein
+from app.adapters.normalizer import (
+    amino_acid_change_text,
+    embedded_gene_symbol_from_variant_query,
+    infer_disease_context_from_name,
+    infer_variant_type_from_notation,
+    normalize_gene_symbol,
+    parse_hgvs_protein,
+)
 from app.adapters.summarizer import (
     build_card_summaries,
     limit_sentences,
@@ -16,6 +22,11 @@ from app.adapters.summarizer import (
     summarize_pathway,
     summarize_protein_function,
     summarize_functional_impact,
+    summarize_disease_fallback,
+    summarize_gene_fallback,
+    summarize_pathway_fallback,
+    summarize_protein_fallback,
+    summarize_variant_fallback,
     strip_citations,
 )
 from app.models import (
@@ -29,7 +40,6 @@ from app.models import (
 )
 from app.services.disease_discovery import discover_candidate_genes
 from app.services.kb_builder import LOCAL_DISEASE_KEY, build_simulation_kb
-from app.services.pathway_builder import build_dynamic_pathway
 from app.services.mutation_engine import interpret_mutation
 from app.services.pathway_simulator import simulate_pathway
 from app.services.protein_effect import predict_protein_effect
@@ -37,10 +47,61 @@ from app.services.protein_effect import predict_protein_effect
 EVIDENCE_UNAVAILABLE_MSG = (
     "External evidence unavailable for this field; using fallback or simulator assumption."
 )
+INVALID_COMBINATION_MSG = "invalid combination"
 
 
 def _prov(category: str, source: str, detail: Optional[str] = None) -> ProvenanceEntry:
     return ProvenanceEntry(category=category, source=source, detail=detail)
+
+
+def _build_local_fallback_pipeline(
+    local_kb: Dict[str, Any],
+    disease_id: str,
+    disease_name: str,
+    gene_symbol: str,
+    mutation_notation: str,
+    pathway_id: Optional[str],
+    pathway_name: Optional[str],
+) -> Tuple[DiseaseDiscoveryResult, MutationResult, ProteinEffectResult, PathwayResult, NormalizedEvidence, bool, Optional[str]]:
+    disease_key = "cancer" if "cancer" in local_kb.get("diseases", {}) else LOCAL_DISEASE_KEY
+    local_disease = local_kb.get("diseases", {}).get(disease_key, {})
+    kb = build_simulation_kb(
+        local_kb,
+        disease_id,
+        disease_name,
+        local_disease.get("description"),
+        gene_symbol,
+        mutation_notation,
+        {},
+        {},
+        {},
+        {},
+        pathway_id,
+        pathway_name,
+    )
+
+    evidence = NormalizedEvidence(
+        disease={"id": disease_id, "name": local_disease.get("label", disease_name)},
+        gene={"symbol": gene_symbol},
+        variant={"notation": mutation_notation},
+        protein={"accession": kb.get("genes", {}).get(gene_symbol, {}).get("protein_id")},
+        pathways=[],
+        sources=["Local fallback"],
+        summaries={},
+        external_evidence_available=False,
+        evidence_notice=EVIDENCE_UNAVAILABLE_MSG,
+    )
+
+    discovery = discover_candidate_genes(kb, disease_key)
+    mutation = interpret_mutation(kb, gene_symbol, mutation_notation)
+    protein = predict_protein_effect(kb, mutation)
+    pathway = simulate_pathway(kb, protein)
+
+    discovery = _build_discovery(discovery, evidence, gene_symbol)
+    mutation = _build_mutation(mutation, evidence)
+    protein = _build_protein(protein, evidence, mutation)
+    pathway = _build_pathway(pathway, evidence, pathway_id, pathway_name)
+    return discovery, mutation, protein, pathway, evidence, False, evidence.evidence_notice
 
 
 def fetch_normalized_evidence(
@@ -93,33 +154,39 @@ def fetch_normalized_evidence(
         "disease": {
             "id": disease_id,
             "name": open_targets.get("disease_name") or disease_name,
-            "description": strip_citations(open_targets.get("disease_description") or "")[:400],
+            "description": strip_citations(open_targets.get("disease_description") or "")[:400]
+            or summarize_disease_fallback(disease_name),
+            "context": infer_disease_context_from_name(disease_name),
         },
         "gene": {
             "symbol": symbol,
             "name": next((c.get("name") for c in open_targets.get("candidates", []) if c.get("symbol") == symbol), symbol),
             "association_score": assoc_score,
             "ensembl_id": next((c.get("ensembl_id") for c in open_targets.get("candidates", []) if c.get("symbol") == symbol), None),
+            "summary": summarize_gene_fallback(symbol, disease_name),
         },
         "variant": {
             "notation": mutation_notation,
-            "variant_type": clinvar.get("variant_type") or ("missense" if parsed else "unknown"),
+            "variant_type": clinvar.get("variant_type") or (infer_variant_type_from_notation(mutation_notation) if mutation_notation else ("missense" if parsed else "unknown")),
             "amino_acid_change": clinvar.get("amino_acid_change") or amino_acid_change_text(mutation_notation),
             "clinvar_classification": clinvar.get("clinvar_classification"),
             "phenotypes": clinvar.get("phenotypes", []),
             "clinvar_available": clinvar.get("available", False),
+            "summary": summarize_variant_fallback(symbol, mutation_notation, clinvar.get("variant_type") or infer_variant_type_from_notation(mutation_notation)),
         },
         "protein": {
-            "name": uniprot.get("protein_name"),
+            "name": uniprot.get("protein_name") or symbol,
             "accession": uniprot.get("accession"),
             "function_raw": uniprot.get("function_raw"),
-            "function_summary": protein_summary,
+            "function_summary": protein_summary or summarize_protein_fallback(uniprot.get("protein_name") or symbol, symbol),
             "domain_hit": uniprot.get("domain_hit"),
             "sequence_length": uniprot.get("sequence_length"),
             "domains": uniprot.get("domains", []),
+            "summary": protein_summary or summarize_protein_fallback(uniprot.get("protein_name") or symbol, symbol),
         },
         "pathways": pathways,
         "sources": sources,
+        "summary": summarize_pathway_fallback(symbol) if not pathways else None,
     }
 
     summaries = build_card_summaries(evidence_dict)
@@ -270,7 +337,7 @@ def _build_protein(protein: ProteinEffectResult, evidence: NormalizedEvidence, m
             "mutation_location": f"Position {mutation.position}" if mutation.position else None,
             "domain_hit": protein_info.get("domain_hit") or (protein.affected_domains[0] if protein.affected_domains else mutation.domain),
             "functional_impact_summary": functional,
-            "summary": protein_info.get("function_summary"),
+            "summary": protein_info.get("function_summary") or protein_info.get("summary"),
             "explanation": limit_sentences(protein.explanation, 3),
             "source": "UniProt + Simulator" if uni.get("available") else "Local fallback + Simulator",
             "external_evidence_available": uni.get("available", False),
@@ -333,6 +400,9 @@ def run_searchable_pipeline(
     pathway_name: Optional[str] = None,
 ) -> Tuple[DiseaseDiscoveryResult, MutationResult, ProteinEffectResult, PathwayResult, NormalizedEvidence, bool, Optional[str]]:
     symbol = normalize_gene_symbol(gene_symbol)
+    embedded_gene = embedded_gene_symbol_from_variant_query(mutation_notation)
+    if embedded_gene and embedded_gene != symbol:
+        raise ValueError(INVALID_COMBINATION_MSG)
 
     if use_external_evidence:
         evidence = fetch_normalized_evidence(
@@ -353,43 +423,15 @@ def run_searchable_pipeline(
             pathway_name,
         )
     else:
-        disease_key = "cancer" if "cancer" in local_kb.get("diseases", {}) else LOCAL_DISEASE_KEY
-        local_disease = local_kb.get("diseases", {}).get(disease_key, {})
-        local_gene = local_kb.get("genes", {}).get(symbol, {})
-        pathway_key, pathway_dict, _ = build_dynamic_pathway(
+        return _build_local_fallback_pipeline(
+            local_kb,
+            disease_id,
+            disease_name,
             symbol,
-            local_gene.get("protein_id"),
-            local_disease.get("label", disease_name),
-            reactome={},
-            pathway_id=pathway_id,
-            pathway_name=pathway_name,
-            local_kb=local_kb,
+            mutation_notation,
+            pathway_id,
+            pathway_name,
         )
-        kb = copy.deepcopy(local_kb)
-        kb.setdefault("pathways", {})[pathway_key] = pathway_dict
-        if symbol in kb.get("genes", {}):
-            kb["genes"][symbol]["active_pathway_key"] = pathway_key
-            kb["genes"][symbol]["pathways"] = [pathway_key]
-        evidence = NormalizedEvidence(
-            disease={"id": disease_id, "name": local_disease.get("label", disease_name)},
-            gene={"symbol": symbol},
-            variant={"notation": mutation_notation},
-            protein={"accession": local_gene.get("protein_id")},
-            pathways=[],
-            sources=["Local fallback"],
-            summaries={},
-            external_evidence_available=False,
-            evidence_notice=EVIDENCE_UNAVAILABLE_MSG,
-        )
-        discovery = discover_candidate_genes(kb, disease_key)
-        mutation = interpret_mutation(kb, symbol, mutation_notation)
-        protein = predict_protein_effect(kb, mutation)
-        pathway = simulate_pathway(kb, protein)
-        discovery = _build_discovery(discovery, evidence, symbol)
-        mutation = _build_mutation(mutation, evidence)
-        protein = _build_protein(protein, evidence, mutation)
-        pathway = _build_pathway(pathway, evidence, pathway_id, pathway_name)
-        return discovery, mutation, protein, pathway, evidence, False, evidence.evidence_notice
 
     discovery = discover_candidate_genes(kb, LOCAL_DISEASE_KEY)
     mutation = interpret_mutation(kb, symbol, mutation_notation)

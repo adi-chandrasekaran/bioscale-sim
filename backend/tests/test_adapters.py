@@ -167,3 +167,15 @@ def test_normalizer_hgvs_parser():
     parsed = parse_hgvs_protein("p.R175H")
     assert parsed is not None
     assert parsed["position"] == 175
+
+
+def test_normalizer_maps_known_ensembl_ids_back_to_symbols():
+    from app.adapters.normalizer import normalize_gene_symbol
+
+    assert normalize_gene_symbol("ENSG00000141510") == "TP53"
+
+
+def test_normalizer_infers_coding_variant_type():
+    from app.adapters.normalizer import infer_variant_type_from_notation
+
+    assert infer_variant_type_from_notation("c.5946delT") in {"coding deletion", "coding variant"}

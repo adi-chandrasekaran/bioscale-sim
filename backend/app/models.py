@@ -102,7 +102,7 @@ class MutationResult(BaseModel):
 class ProteinEffectResult(BaseModel):
     gene: str
     protein_name: str
-    protein_id: str
+    protein_id: Optional[str] = None
     mutation: str
     activity: float
     stability: float

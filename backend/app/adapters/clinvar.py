@@ -7,6 +7,7 @@ import requests
 from app.adapters.cache import get_cached, set_cached
 from app.adapters.normalizer import (
     hgvs_to_clinvar_query,
+    infer_variant_type_from_notation,
     normalize_clinvar_classification,
     normalize_gene_symbol,
     normalize_variant_query,
@@ -103,6 +104,9 @@ def search_variants(query: str, gene_symbol: Optional[str] = None, limit: int = 
     results = []
     for summary in summaries:
         title = summary.get("title", "")
+        variant_type = _guess_variant_type(title, norm["parsed"])
+        if variant_type == "unknown":
+            variant_type = infer_variant_type_from_notation(norm["notation"])
         results.append(
             {
                 "id": str(summary.get("uid", "")),
@@ -110,12 +114,14 @@ def search_variants(query: str, gene_symbol: Optional[str] = None, limit: int = 
                 "notation": norm["notation"],
                 "gene_symbol": norm["gene_symbol"],
                 "classification": _extract_classification(summary),
-                "variant_type": _guess_variant_type(title, norm["parsed"]),
+                "variant_type": variant_type,
                 "source": SOURCE_NAME,
             }
         )
 
-    if not results and norm["parsed"]:
+    inferred_type = infer_variant_type_from_notation(norm["notation"])
+
+    if not results and (norm["parsed"] or inferred_type != "variant"):
         parsed = norm["parsed"]
         results.append(
             {
@@ -124,7 +130,7 @@ def search_variants(query: str, gene_symbol: Optional[str] = None, limit: int = 
                 "notation": norm["notation"],
                 "gene_symbol": norm["gene_symbol"],
                 "classification": None,
-                "variant_type": "missense" if parsed["from_aa"] != parsed["to_aa"] else "unknown",
+                "variant_type": "missense" if parsed and parsed["from_aa"] != parsed["to_aa"] else inferred_type,
                 "source": "HGVS parser",
                 "parser_only": True,
             }
@@ -163,8 +169,7 @@ def safe_search_variants(query: str, gene_symbol: Optional[str] = None, limit: i
     except Exception as exc:  # noqa: BLE001
         norm = normalize_variant_query(query, gene_symbol)
         fallback = []
-        if norm["parsed"]:
-            parsed = norm["parsed"]
+        if norm["parsed"] or infer_variant_type_from_notation(norm["notation"]) != "variant":
             fallback.append(
                 {
                     "id": None,
@@ -172,7 +177,7 @@ def safe_search_variants(query: str, gene_symbol: Optional[str] = None, limit: i
                     "notation": norm["notation"],
                     "gene_symbol": norm["gene_symbol"],
                     "classification": None,
-                    "variant_type": "missense",
+                    "variant_type": infer_variant_type_from_notation(norm["notation"]),
                     "source": "HGVS parser",
                     "parser_only": True,
                 }
@@ -201,7 +206,7 @@ def fetch_variant_evidence(gene_symbol: str, mutation_notation: str) -> Dict[str
 
     classification = "unknown"
     phenotypes: List[str] = []
-    variant_type = parsed and "missense" if parsed and parsed["from_aa"] != parsed["to_aa"] else "unknown"
+    variant_type = parsed and "missense" if parsed and parsed["from_aa"] != parsed["to_aa"] else infer_variant_type_from_notation(mutation_notation)
     clinvar_ids: List[str] = []
 
     if summaries:
@@ -216,6 +221,8 @@ def fetch_variant_evidence(gene_symbol: str, mutation_notation: str) -> Dict[str
             variant_type = "frameshift"
         elif "nonsense" in title.lower() or "stop gained" in title.lower():
             variant_type = "nonsense"
+    if variant_type == "unknown":
+        variant_type = infer_variant_type_from_notation(mutation_notation)
 
     result = {
         "source": SOURCE_NAME,
@@ -248,7 +255,7 @@ def safe_fetch_variant_evidence(gene_symbol: str, mutation_notation: str) -> Dic
             "available": False,
             "gene_symbol": normalize_gene_symbol(gene_symbol),
             "mutation_notation": mutation_notation,
-            "variant_type": "unknown",
+            "variant_type": infer_variant_type_from_notation(mutation_notation),
             "amino_acid_change": (
                 f"{parsed['from_aa']}→{parsed['to_aa']} at position {parsed['position']}"
                 if parsed

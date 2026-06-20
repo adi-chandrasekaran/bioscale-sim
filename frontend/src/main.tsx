@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import type { PopulationPoint, SelectedEntity, SimulationRequest, SimulationResult } from "./types";
@@ -15,6 +15,31 @@ const DEFAULT_VARIANT: SelectedEntity = { id: "p.R175H", label: "p.R175H", meta:
 
 function fmt(value: number) {
   return Number.isFinite(value) ? value.toFixed(2) : "—";
+}
+
+function canonicalGeneSymbol(entity: SelectedEntity | null) {
+  if (!entity) return "";
+  const metaSymbol = typeof entity.meta?.symbol === "string" ? entity.meta.symbol : "";
+  return (metaSymbol || entity.label || entity.id || "").trim();
+}
+
+function canonicalMutationNotation(entity: SelectedEntity | null) {
+  if (!entity) return "";
+  const metaNotation = typeof entity.meta?.notation === "string" ? entity.meta.notation : "";
+  return (metaNotation || entity.label || entity.id || "").trim();
+}
+
+function normalizeGeneSelection(entity: SelectedEntity | null) {
+  if (!entity) return null;
+  const symbol = canonicalGeneSymbol(entity);
+  return {
+    id: symbol,
+    label: symbol,
+    meta: {
+      ...entity.meta,
+      symbol,
+    },
+  };
 }
 
 function Pipeline() {
@@ -76,11 +101,22 @@ function PopulationChart({ points }: { points: PopulationPoint[] }) {
   );
 }
 
-function LayerCard({ title, children }: { title: string; children: React.ReactNode }) {
+function LayerCard({
+  title,
+  children,
+  className = "",
+  footer,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+  footer?: string;
+}) {
   return (
-    <section className="card">
+    <section className={`card ${className}`.trim()}>
       <h2>{title}</h2>
       {children}
+      {footer && <p className="cardFooter">{footer}</p>}
     </section>
   );
 }
@@ -121,33 +157,31 @@ function App() {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedGeneOverride, setSelectedGeneOverride] = useState<string | null>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
 
-  const activeGene = selectedGeneOverride ?? gene?.label ?? gene?.id ?? "";
+  const activeGene = canonicalGeneSymbol(gene);
+  const ready = Boolean(disease && activeGene && variant);
 
-  function resetSimulationState() {
-    setResult(null);
-    setError(null);
-    setSelectedGeneOverride(null);
-  }
-
-  useEffect(() => {
-    resetSimulationState();
-  }, [disease?.id, gene?.id, variant?.id, pathway?.id]);
-
-  async function runSimulation(geneOverride?: string) {
-    if (!disease || !gene || !variant) {
+  const runSimulation = useCallback(async () => {
+    if (!disease || !gene || !variant || !activeGene) {
+      setLoading(false);
+      setResult(null);
       setError("Search for and select a disease, gene, and mutation to begin.");
       return;
     }
-    const geneSymbol = geneOverride ?? gene.id ?? gene.label;
+    const geneSymbol = activeGene;
+    const mutationNotation = canonicalMutationNotation(variant);
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     setLoading(true);
     setError(null);
+    setResult(null);
     const request: SimulationRequest = {
       disease_id: disease.id,
       disease_name: disease.label,
       gene: geneSymbol,
-      mutation: (variant.meta?.notation as string) || variant.label,
+      mutation: mutationNotation,
       pathway_id: pathway?.id,
       pathway_name: pathway?.label,
       steps,
@@ -162,19 +196,40 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),
+        signal: controller.signal,
       });
       const json = await res.json();
+      if (controller.signal.aborted) return;
       if (!res.ok) throw new Error(json.detail ?? "Simulation failed");
       setResult(json);
-      setSelectedGeneOverride(geneSymbol);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Simulation failed");
     } finally {
-      setLoading(false);
+      if (requestControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
-  }
+  }, [activeGene, disease, gene, variant, pathway?.id, pathway?.label, steps, useExternal]);
 
-  const ready = Boolean(disease && gene && variant);
+  useEffect(() => {
+    setError(null);
+    if (!ready) {
+      setResult(null);
+      setLoading(false);
+      requestControllerRef.current?.abort();
+      return;
+    }
+    setResult(null);
+    const timer = window.setTimeout(() => {
+      void runSimulation();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [ready, disease?.id, disease?.label, gene?.id, gene?.label, variant?.id, variant?.label, pathway?.id, pathway?.label, steps, useExternal, runSimulation]);
+
+  useEffect(() => () => {
+    requestControllerRef.current?.abort();
+  }, []);
 
   return (
     <main>
@@ -198,35 +253,39 @@ function App() {
           placeholder="e.g. breast cancer, Alzheimer, cystic fibrosis"
           endpoint="/api/search/diseases"
           value={disease}
-          onChange={(item) => { setDisease(item); resetSimulationState(); }}
+          onChange={(item) => { setDisease(item); }}
           initialQuery="cancer"
+          allowFreeText
         />
         <AutocompleteSearch
           label="Gene"
           placeholder="e.g. TP53, BRCA1, KRAS"
           endpoint="/api/search/genes"
           value={gene}
-          onChange={(g) => { setGene(g); resetSimulationState(); }}
+          onChange={(g) => { setGene(normalizeGeneSelection(g)); }}
           initialQuery="TP53"
+          allowFreeText
         />
         <AutocompleteSearch
           label="Mutation / variant"
           placeholder="e.g. p.R175H, V600E, rs121913343"
           endpoint="/api/search/variants"
-          extraParams={gene ? { gene: gene.id || gene.label } : {}}
+          extraParams={activeGene ? { gene: activeGene } : {}}
           value={variant}
-          onChange={(v) => { setVariant(v); resetSimulationState(); }}
+          onChange={(v) => { setVariant(v); }}
           initialQuery="p.R175H"
           disabled={!gene}
+          allowFreeText
         />
         <AutocompleteSearch
           label="Pathway (optional)"
           placeholder="Filter Reactome pathways for selected gene"
           endpoint="/api/search/pathways"
-          extraParams={gene ? { gene: gene.id || gene.label } : {}}
+          extraParams={activeGene ? { gene: activeGene } : {}}
           value={pathway}
-          onChange={(p) => { setPathway(p); resetSimulationState(); }}
+          onChange={(p) => { setPathway(p); }}
           disabled={!gene}
+          allowFreeText
         />
         <div className="field compact">
           <label>Steps</label>
@@ -236,7 +295,7 @@ function App() {
           <input type="checkbox" checked={useExternal} onChange={(e) => setUseExternal(e.target.checked)} />
           Use external databases
         </label>
-        <button onClick={() => runSimulation()} disabled={loading || !ready}>
+        <button onClick={() => void runSimulation()} disabled={loading || !ready}>
           {loading ? "Running…" : "Run simulation"}
         </button>
       </section>
@@ -250,7 +309,7 @@ function App() {
       {result && (
         <div className="grid">
           <SimulationInputPanel input={result.simulation_input} />
-          <LayerCard title="1. Disease discovery → candidate gene">
+          <LayerCard title="1. Disease discovery → candidate gene" footer="This card ranks disease-linked genes and explains which evidence supports the leading candidate.">
             <CardSourceHeader
               source={result.disease_discovery.external_evidence_available ? "Open Targets" : "Local fallback"}
               externalAvailable={result.disease_discovery.external_evidence_available}
@@ -265,9 +324,7 @@ function App() {
                   type="button"
                   className={c.symbol === activeGene ? "candidate selected clickable" : "candidate clickable"}
                   onClick={() => {
-                    setSelectedGeneOverride(c.symbol);
-                    setGene({ id: c.symbol, label: c.symbol });
-                    runSimulation(c.symbol);
+                    setGene(normalizeGeneSelection({ id: c.symbol, label: c.symbol, meta: { symbol: c.symbol } }));
                   }}
                 >
                   <div className="candidateMain">
@@ -282,7 +339,7 @@ function App() {
             <RawEvidence data={result.disease_discovery.raw_evidence} />
           </LayerCard>
 
-          <LayerCard title="2. Mutation engine">
+          <LayerCard title="2. Mutation engine" footer="This card interprets the chosen variant and translates it into a mutation type the simulator can use.">
             <CardSourceHeader source={result.mutation_result.source} externalAvailable={result.mutation_result.external_evidence_available} notice={result.mutation_result.evidence_notice} />
             <ConciseSummary text={result.mutation_result.summary} />
             <ProvenanceRow label="Variant" value={<><strong>{result.mutation_result.gene} {result.mutation_result.mutation}</strong> — {result.mutation_result.kind}</>} provenance={result.mutation_result.provenance.kind} />
@@ -298,7 +355,7 @@ function App() {
             <RawEvidence data={result.mutation_result.raw_evidence} />
           </LayerCard>
 
-          <LayerCard title="3. Protein effect">
+          <LayerCard title="3. Protein effect" className="wide" footer="This card estimates how strongly the mutation changes protein activity, stability, and binding.">
             <CardSourceHeader source={result.protein_effect.source} externalAvailable={result.protein_effect.external_evidence_available} notice={result.protein_effect.evidence_notice} />
             <ConciseSummary text={result.protein_effect.summary || result.protein_effect.function_summary} />
             <ProvenanceRow label="Protein" value={`${result.protein_effect.protein_name} (${result.protein_effect.protein_id})`} provenance={result.protein_effect.provenance.protein_name} />
@@ -313,7 +370,7 @@ function App() {
             <RawEvidence data={result.protein_effect.raw_evidence} />
           </LayerCard>
 
-          <LayerCard title="4. Pathway simulator">
+          <LayerCard title="4. Pathway simulator" className="wide" footer="This card propagates the gene effect through a pathway graph and marks the processes that shift.">
             <CardSourceHeader source={result.pathway_result.source} externalAvailable={result.pathway_result.external_evidence_available} notice={result.pathway_result.evidence_notice} />
             {result.pathway_result.is_generic_fallback && (
               <p className="evidenceNotice">Generic simulator pathway generated from selected gene evidence; edge weights are model assumptions.</p>
@@ -333,7 +390,7 @@ function App() {
             <RawEvidence data={result.pathway_result.raw_evidence} />
           </LayerCard>
 
-          <LayerCard title="5. Cell phenotype">
+          <LayerCard title="5. Cell phenotype" className="wide" footer="This card turns pathway disruption into cell-level behavior such as proliferation, repair, and apoptosis.">
             <CardSourceHeader source={result.cell_phenotype.source} />
             <ComputedFromLine
               gene={result.cell_phenotype.computed_from_gene}
@@ -350,7 +407,7 @@ function App() {
             <ProvenanceBadge category="computed_model" source="Cell simulator" />
           </LayerCard>
 
-          <LayerCard title="6. Population dynamics">
+          <LayerCard title="6. Population dynamics" className="wide" footer="This card projects whether the altered cell state stays rare or expands across a population.">
             <CardSourceHeader source={result.population_result.source} />
             <ComputedFromLine
               gene={result.population_result.computed_from_gene}
@@ -364,7 +421,7 @@ function App() {
             <ProvenanceBadge category="computed_model" source="Population simulator" />
           </LayerCard>
 
-          <LayerCard title="7. Ecosystem behavior">
+          <LayerCard title="7. Ecosystem behavior" className="wide" footer="This card combines cell behavior with immune and tissue context to estimate overall ecosystem risk.">
             <CardSourceHeader source={result.ecosystem_result.source} />
             <ComputedFromLine
               gene={result.ecosystem_result.computed_from_gene}
@@ -381,7 +438,7 @@ function App() {
             <ProvenanceBadge category="computed_model" source="Ecosystem simulator" />
           </LayerCard>
 
-          <LayerCard title="Research summary">
+          <LayerCard title="Research summary" className="wide" footer="This card compresses the full run into a single readable summary for quick review.">
             <ConciseSummary text={result.research_summary} />
             {result.evidence_notice && <p className="evidenceNotice">{result.evidence_notice}</p>}
             <p className="muted">{result.disclaimer}</p>

@@ -30,7 +30,7 @@ def predict_protein_effect(kb: Dict[str, Any], mutation: MutationResult) -> Prot
     return ProteinEffectResult(
         gene=mutation.gene,
         protein_name=gene["name"],
-        protein_id=gene.get("protein_id", "unknown"),
+        protein_id=gene.get("protein_id") or f"unknown:{mutation.gene}",
         mutation=mutation.mutation,
         activity=round4(activity),
         stability=round4(stability),

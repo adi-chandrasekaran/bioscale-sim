@@ -67,7 +67,7 @@ def simulate_pathway(kb: Dict[str, Any], protein_effect: ProteinEffectResult, it
     is_generic = pathway.get("is_generic_fallback", False)
 
     explanation = (
-        f"Pathway simulation perturbed {gene_symbol} ({gene_meta.get('protein_id', 'unknown')}) "
+        f"Pathway simulation perturbed {gene_symbol} ({gene_meta.get('protein_id') or 'unknown'}) "
         f"using protein activity={protein_effect.activity:.2f}. "
         f"Signal propagated through {pathway['label']}. "
         f"Changed nodes: {', '.join(changed_nodes) or 'none'}."

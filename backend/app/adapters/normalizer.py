@@ -30,9 +30,23 @@ GENE_ENSEMBL_MAP: Dict[str, str] = {
     "APP": "ENSG00000142192",
 }
 
+ENSEMBL_GENE_MAP: Dict[str, str] = {ensembl: symbol for symbol, ensembl in GENE_ENSEMBL_MAP.items()}
+
 # Gene symbol → default UniProt accession (human).
 GENE_UNIPROT_MAP: Dict[str, str] = {
     "TP53": "P04637",
+    "BRCA1": "P38398",
+    "BRCA2": "P51587",
+    "KRAS": "P01116",
+    "PIK3CA": "P42336",
+    "EGFR": "P00533",
+    "ALK": "Q9UM73",
+    "PTEN": "P60484",
+    "APC": "P25054",
+    "MLH1": "P40692",
+    "MSH2": "P43246",
+    "MSH6": "P52701",
+    "PMS2": "P54278",
     "MDM2": "Q00987",
     "CDKN1A": "P38936",
     "BAX": "Q07812",
@@ -62,7 +76,8 @@ def normalize_disease(disease_key: str) -> Dict[str, str]:
 
 
 def normalize_gene_symbol(gene_symbol: str) -> str:
-    return gene_symbol.strip().upper()
+    symbol = gene_symbol.strip().upper()
+    return ENSEMBL_GENE_MAP.get(symbol, symbol)
 
 
 def get_ensembl_id(gene_symbol: str) -> Optional[str]:
@@ -116,6 +131,76 @@ def normalize_variant_query(query: str, gene_symbol: Optional[str] = None) -> Di
         "is_rsid": bool(RSID_RE.match(variant_text)),
         "notation": parsed["notation"] if parsed else variant_text,
     }
+
+
+def embedded_gene_symbol_from_variant_query(query: str) -> Optional[str]:
+    text = query.strip()
+    if " " not in text:
+        return None
+    parts = text.split()
+    if len(parts) < 2 or not parts[0].isalnum():
+        return None
+    if not (parts[1].startswith("p.") or parts[1].startswith("rs") or re.match(r"^[A-Z]\d+[A-Z]$", parts[1], re.IGNORECASE)):
+        return None
+    return normalize_gene_symbol(parts[0])
+
+
+def infer_variant_type_from_notation(notation: str) -> str:
+    text = notation.strip().lower()
+    if not text:
+        return "unknown"
+    if text.startswith("rs"):
+        return "single nucleotide variant"
+    if text.startswith("p."):
+        if "fs" in text or "frameshift" in text:
+            return "frameshift"
+        if "del" in text and "ins" in text:
+            return "indel"
+        if "del" in text:
+            return "deletion"
+        if "ins" in text:
+            return "insertion"
+        if "stop" in text or "*" in text:
+            return "nonsense"
+        if re.search(r"p\.[a-z]\d+[a-z]", text):
+            return "missense"
+        return "protein change"
+    if text.startswith("c."):
+        if "del" in text and "ins" in text:
+            return "coding indel"
+        if "del" in text:
+            return "coding deletion"
+        if "ins" in text:
+            return "coding insertion"
+        if "dup" in text:
+            return "coding duplication"
+        if "fs" in text:
+            return "coding frameshift"
+        return "coding variant"
+    if "splice" in text or "+1" in text or "-1" in text:
+        return "splice variant"
+    if "del" in text:
+        return "deletion"
+    if "ins" in text:
+        return "insertion"
+    if "dup" in text:
+        return "duplication"
+    return "variant"
+
+
+def infer_disease_context_from_name(disease_name: str) -> str:
+    text = disease_name.strip().lower()
+    if not text:
+        return "selected disease context"
+    if any(term in text for term in ("colon", "colorectal", "intestinal", "bowel")):
+        return "gastrointestinal epithelial disease context"
+    if any(term in text for term in ("ovarian", "breast", "mammary")):
+        return "epithelial hormone-responsive disease context"
+    if any(term in text for term in ("neuro", "alzheimer", "parkinson", "dement")):
+        return "neurodegenerative disease context"
+    if "cancer" in text or "carcinoma" in text or "tumor" in text:
+        return "oncogenic disease context"
+    return "selected disease context"
 
 
 def infer_multipliers_from_classification(classification: Optional[str]) -> Dict[str, float]:
