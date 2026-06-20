@@ -6,6 +6,14 @@ import { PathwayGraph } from "./PathwayGraph";
 import { AutocompleteSearch } from "./AutocompleteSearch";
 import { CardSourceHeader, ProvenanceBadge, ProvenanceRow } from "./ProvenanceBadge";
 import { ConciseSummary, RawEvidence } from "./Summary";
+import {
+  CardTabBar,
+  CellPhenotypeVisual,
+  EcosystemVisual,
+  PopulationDynamicsVisual,
+  ProteinEffectVisual,
+  type CardViewMode,
+} from "./SimulationVisuals";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
@@ -158,6 +166,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const [cardViews, setCardViews] = useState<Record<"protein" | "cell" | "population" | "ecosystem", CardViewMode>>({
+    protein: "summary",
+    cell: "summary",
+    population: "summary",
+    ecosystem: "summary",
+  });
 
   const activeGene = canonicalGeneSymbol(gene);
   const ready = Boolean(disease && activeGene && variant);
@@ -174,6 +188,7 @@ function App() {
     requestControllerRef.current?.abort();
     const controller = new AbortController();
     requestControllerRef.current = controller;
+    setCardViews({ protein: "summary", cell: "summary", population: "summary", ecosystem: "summary" });
     setLoading(true);
     setError(null);
     setResult(null);
@@ -356,18 +371,25 @@ function App() {
           </LayerCard>
 
           <LayerCard title="3. Protein effect" className="wide" footer="This card estimates how strongly the mutation changes protein activity, stability, and binding.">
-            <CardSourceHeader source={result.protein_effect.source} externalAvailable={result.protein_effect.external_evidence_available} notice={result.protein_effect.evidence_notice} />
-            <ConciseSummary text={result.protein_effect.summary || result.protein_effect.function_summary} />
-            <ProvenanceRow label="Protein" value={`${result.protein_effect.protein_name} (${result.protein_effect.protein_id})`} provenance={result.protein_effect.provenance.protein_name} />
-            {result.protein_effect.mutation_location && <ProvenanceRow label="Mutation location" value={result.protein_effect.mutation_location} />}
-            {result.protein_effect.domain_hit && <ProvenanceRow label="Domain hit" value={result.protein_effect.domain_hit} provenance={result.protein_effect.provenance.function_summary} />}
-            <ProvenanceRow label="Structural impact" value={result.protein_effect.structural_impact_placeholder} provenance={result.protein_effect.provenance.structural_impact_placeholder} />
-            <ConciseSummary text={result.protein_effect.functional_impact_summary} />
-            <ScoreBar label="Remaining activity" value={result.protein_effect.activity} provenance={result.protein_effect.provenance.activity} />
-            <ScoreBar label="Remaining stability" value={result.protein_effect.stability} provenance={result.protein_effect.provenance.stability} />
-            <ScoreBar label="Remaining binding" value={result.protein_effect.binding} provenance={result.protein_effect.provenance.binding} />
-            <ScoreBar label="Loss-of-function score" value={result.protein_effect.loss_of_function_score} provenance={result.protein_effect.provenance.loss_of_function_score} />
-            <RawEvidence data={result.protein_effect.raw_evidence} />
+            <CardTabBar value={cardViews.protein} onChange={(value) => setCardViews((current) => ({ ...current, protein: value }))} visualLabel="AlphaFold" />
+            {cardViews.protein === "summary" ? (
+              <>
+                <CardSourceHeader source={result.protein_effect.source} externalAvailable={result.protein_effect.external_evidence_available} notice={result.protein_effect.evidence_notice} />
+                <ConciseSummary text={result.protein_effect.summary || result.protein_effect.function_summary} />
+                <ProvenanceRow label="Protein" value={`${result.protein_effect.protein_name} (${result.protein_effect.protein_id})`} provenance={result.protein_effect.provenance.protein_name} />
+                {result.protein_effect.mutation_location && <ProvenanceRow label="Mutation location" value={result.protein_effect.mutation_location} />}
+                {result.protein_effect.domain_hit && <ProvenanceRow label="Domain hit" value={result.protein_effect.domain_hit} provenance={result.protein_effect.provenance.function_summary} />}
+                <ProvenanceRow label="Structural impact" value={result.protein_effect.structural_impact_placeholder} provenance={result.protein_effect.provenance.structural_impact_placeholder} />
+                <ConciseSummary text={result.protein_effect.functional_impact_summary} />
+                <ScoreBar label="Remaining activity" value={result.protein_effect.activity} provenance={result.protein_effect.provenance.activity} />
+                <ScoreBar label="Remaining stability" value={result.protein_effect.stability} provenance={result.protein_effect.provenance.stability} />
+                <ScoreBar label="Remaining binding" value={result.protein_effect.binding} provenance={result.protein_effect.provenance.binding} />
+                <ScoreBar label="Loss-of-function score" value={result.protein_effect.loss_of_function_score} provenance={result.protein_effect.provenance.loss_of_function_score} />
+                <RawEvidence data={result.protein_effect.raw_evidence} />
+              </>
+            ) : (
+              <ProteinEffectVisual protein={result.protein_effect} />
+            )}
           </LayerCard>
 
           <LayerCard title="4. Pathway simulator" className="wide" footer="This card propagates the gene effect through a pathway graph and marks the processes that shift.">
@@ -391,51 +413,72 @@ function App() {
           </LayerCard>
 
           <LayerCard title="5. Cell phenotype" className="wide" footer="This card turns pathway disruption into cell-level behavior such as proliferation, repair, and apoptosis.">
-            <CardSourceHeader source={result.cell_phenotype.source} />
-            <ComputedFromLine
-              gene={result.cell_phenotype.computed_from_gene}
-              pathway={result.cell_phenotype.computed_from_pathway}
-              proteinActivity={result.cell_phenotype.computed_from_protein_activity}
-            />
-            <div className="twoCols">
-              <ScoreBar label="Proliferation" value={result.cell_phenotype.proliferation_rate} />
-              <ScoreBar label="Apoptosis" value={result.cell_phenotype.apoptosis_rate} />
-              <ScoreBar label="Repair capacity" value={result.cell_phenotype.repair_capacity} />
-              <ScoreBar label="Genomic instability" value={result.cell_phenotype.genomic_instability} />
-            </div>
-            <ConciseSummary text={result.cell_phenotype.explanation} />
-            <ProvenanceBadge category="computed_model" source="Cell simulator" />
+            <CardTabBar value={cardViews.cell} onChange={(value) => setCardViews((current) => ({ ...current, cell: value }))} visualLabel="Model" />
+            {cardViews.cell === "summary" ? (
+              <>
+                <CardSourceHeader source={result.cell_phenotype.source} />
+                <ComputedFromLine
+                  gene={result.cell_phenotype.computed_from_gene}
+                  pathway={result.cell_phenotype.computed_from_pathway}
+                  proteinActivity={result.cell_phenotype.computed_from_protein_activity}
+                />
+                <div className="twoCols">
+                  <ScoreBar label="Proliferation" value={result.cell_phenotype.proliferation_rate} />
+                  <ScoreBar label="Apoptosis" value={result.cell_phenotype.apoptosis_rate} />
+                  <ScoreBar label="Repair capacity" value={result.cell_phenotype.repair_capacity} />
+                  <ScoreBar label="Genomic instability" value={result.cell_phenotype.genomic_instability} />
+                </div>
+                <ConciseSummary text={result.cell_phenotype.explanation} />
+                <ProvenanceBadge category="computed_model" source="Cell simulator" />
+              </>
+            ) : (
+              <CellPhenotypeVisual cell={result.cell_phenotype} diseaseName={result.simulation_input.disease_name} />
+            )}
           </LayerCard>
 
           <LayerCard title="6. Population dynamics" className="wide" footer="This card projects whether the altered cell state stays rare or expands across a population.">
-            <CardSourceHeader source={result.population_result.source} />
-            <ComputedFromLine
-              gene={result.population_result.computed_from_gene}
-              pathway={result.population_result.computed_from_pathway}
-              proteinActivity={result.population_result.computed_from_protein_activity}
-            />
-            <PopulationChart points={result.population_result.trajectory} />
-            <ScoreBar label="Final mutated fraction" value={result.population_result.final_mutated_fraction} />
-            <ScoreBar label="Clonal expansion score" value={result.population_result.clonal_expansion_score} />
-            <ConciseSummary text={result.population_result.explanation} />
-            <ProvenanceBadge category="computed_model" source="Population simulator" />
+            <CardTabBar value={cardViews.population} onChange={(value) => setCardViews((current) => ({ ...current, population: value }))} visualLabel="Model" />
+            {cardViews.population === "summary" ? (
+              <>
+                <CardSourceHeader source={result.population_result.source} />
+                <ComputedFromLine
+                  gene={result.population_result.computed_from_gene}
+                  pathway={result.population_result.computed_from_pathway}
+                  proteinActivity={result.population_result.computed_from_protein_activity}
+                />
+                <PopulationChart points={result.population_result.trajectory} />
+                <ScoreBar label="Final mutated fraction" value={result.population_result.final_mutated_fraction} />
+                <ScoreBar label="Clonal expansion score" value={result.population_result.clonal_expansion_score} />
+                <ConciseSummary text={result.population_result.explanation} />
+                <ProvenanceBadge category="computed_model" source="Population simulator" />
+              </>
+            ) : (
+              <PopulationDynamicsVisual population={result.population_result} active={cardViews.population === "visual"} />
+            )}
           </LayerCard>
 
           <LayerCard title="7. Ecosystem behavior" className="wide" footer="This card combines cell behavior with immune and tissue context to estimate overall ecosystem risk.">
-            <CardSourceHeader source={result.ecosystem_result.source} />
-            <ComputedFromLine
-              gene={result.ecosystem_result.computed_from_gene}
-              pathway={result.ecosystem_result.computed_from_pathway}
-              proteinActivity={result.ecosystem_result.computed_from_protein_activity}
-            />
-            <div className="twoCols">
-              <ScoreBar label="Tumor-like burden" value={result.ecosystem_result.tumor_like_burden} />
-              <ScoreBar label="Immune clearance" value={result.ecosystem_result.immune_clearance} />
-              <ScoreBar label="Inflammation" value={result.ecosystem_result.inflammation} />
-              <ScoreBar label="Ecosystem risk" value={result.ecosystem_result.ecosystem_risk_score} />
-            </div>
-            <ConciseSummary text={result.ecosystem_result.explanation} />
-            <ProvenanceBadge category="computed_model" source="Ecosystem simulator" />
+            <CardTabBar value={cardViews.ecosystem} onChange={(value) => setCardViews((current) => ({ ...current, ecosystem: value }))} visualLabel="Model" />
+            {cardViews.ecosystem === "summary" ? (
+              <>
+                <CardSourceHeader source={result.ecosystem_result.source} />
+                <ComputedFromLine
+                  gene={result.ecosystem_result.computed_from_gene}
+                  pathway={result.ecosystem_result.computed_from_pathway}
+                  proteinActivity={result.ecosystem_result.computed_from_protein_activity}
+                />
+                <div className="twoCols">
+                  <ScoreBar label="Tumor-like burden" value={result.ecosystem_result.tumor_like_burden} />
+                  <ScoreBar label="Immune clearance" value={result.ecosystem_result.immune_clearance} />
+                  <ScoreBar label="Inflammation" value={result.ecosystem_result.inflammation} />
+                  <ScoreBar label="Ecosystem risk" value={result.ecosystem_result.ecosystem_risk_score} />
+                </div>
+                <ConciseSummary text={result.ecosystem_result.explanation} />
+                <ProvenanceBadge category="computed_model" source="Ecosystem simulator" />
+              </>
+            ) : (
+              <EcosystemVisual ecosystem={result.ecosystem_result} diseaseName={result.simulation_input.disease_name} />
+            )}
           </LayerCard>
 
           <LayerCard title="Research summary" className="wide" footer="This card compresses the full run into a single readable summary for quick review.">

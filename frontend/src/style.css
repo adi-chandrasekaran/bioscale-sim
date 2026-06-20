@@ -400,6 +400,583 @@ h2 {
   line-height: 1.5;
 }
 
+.cardTabs {
+  display: inline-flex;
+  gap: 6px;
+  margin: 2px 0 14px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #edf7f1;
+  border: 1px solid #cfe1d5;
+}
+
+.cardTabButton {
+  border: 0;
+  background: transparent;
+  color: #4a665d;
+  box-shadow: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cardTabButton.active {
+  background: #12201d;
+  color: #ffffff;
+}
+
+.visualPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.visualPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.visualEyebrow {
+  margin: 0 0 6px;
+  color: #437764;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.visualPanel h3 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.visualSubtext {
+  margin: 6px 0 0;
+  color: #64746f;
+  font-size: 13px;
+}
+
+.visualMetaStack {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.visualMeta {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #f4f8f5;
+  border: 1px solid #dce9df;
+  color: #4a665d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.proteinVisualGrid,
+.populationVisualGrid,
+.ecosystemVisualGrid,
+.cellVisualLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.proteinStructureFrame,
+.visualMetricsStack,
+.populationStats,
+.ecosystemRing,
+.cellVisualLayout {
+  min-height: 0;
+}
+
+.proteinStructureFrame,
+.populationVisualSvg,
+.cellVisualSvg,
+.ecosystemRingSvg {
+  background: #f7fbf8;
+  border: 1px solid #dce9df;
+  border-radius: 18px;
+}
+
+.proteinStructureFrame {
+  padding: 12px 12px 6px;
+}
+
+.proteinStructureLegend {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #64746f;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.proteinStructureSvg {
+  width: 100%;
+  height: 260px;
+  display: block;
+}
+
+.proteinSvgTitle {
+  fill: #4a665d;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.proteinSvgLabel,
+.proteinSvgAxis,
+.proteinSvgMutation {
+  fill: #12201d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.proteinSvgMutation {
+  fill: #8a1f1f;
+  font-size: 11px;
+}
+
+.visualMetricsStack {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.metricGauge {
+  display: grid;
+  gap: 6px;
+}
+
+.metricGaugeTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #12201d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.metricGauge .barOuter {
+  height: 9px;
+}
+
+.metricGauge .barInner.highlight {
+  box-shadow: 0 0 0 1px rgba(200, 77, 77, 0.12) inset;
+}
+
+.visualCallout {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f4f8f5;
+  border: 1px solid #dce9df;
+}
+
+.visualCallout strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #12201d;
+}
+
+.visualCallout p {
+  margin: 0;
+  color: #57766b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.alphaFoldLink {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: #12201d;
+  color: #fff;
+  font-weight: 900;
+  box-shadow: 0 14px 28px rgba(18, 32, 29, 0.18);
+}
+
+.cellVisualLayout {
+  align-items: stretch;
+}
+
+.cellVisualSvg,
+.populationVisualSvg,
+.ecosystemRingSvg {
+  width: 100%;
+  height: 360px;
+  display: block;
+}
+
+.cellTitle {
+  fill: #12201d;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.cellTitleSmall {
+  fill: #4a665d;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.cellMetricLabel,
+.cellNodeLabel,
+.populationAxisLabel,
+.ecosystemOrbLabel,
+.cellOrganelleLabel,
+.ecosystemZoneLabel,
+.ecosystemZoneValue,
+.ecosystemZoneHint {
+  fill: #57766b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cellMetricValue {
+  fill: #12201d;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.cellArrow {
+  stroke: #9fcbb8;
+  stroke-width: 4;
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 12 10;
+  animation: dashMove 2.2s linear infinite;
+}
+
+.cellOrganelle {
+  cursor: pointer;
+}
+
+.cellOrganelle.selected .cellOrganelleLabel {
+  fill: #ffffff;
+}
+
+.cellPartList {
+  display: grid;
+  gap: 8px;
+}
+
+.cellPartButton {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  background: #f4f8f5;
+  border: 1px solid #dce9df;
+  color: #12201d;
+  box-shadow: none;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.cellPartButton.active {
+  background: #12201d;
+  color: #ffffff;
+}
+
+.cellPartButton span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cellPartButton strong {
+  font-size: 12px;
+}
+
+.populationVisualGrid {
+  align-items: center;
+}
+
+.visualAxis {
+  stroke: #8aa99d;
+  stroke-width: 2;
+}
+
+.populationLine {
+  stroke: #237457;
+  stroke-width: 5;
+  filter: drop-shadow(0 3px 8px rgba(35, 116, 87, 0.15));
+}
+
+.populationNode {
+  fill: #d5e8de;
+  stroke: #237457;
+  stroke-width: 2;
+}
+
+.populationNode.active {
+  fill: #237457;
+  stroke: #12201d;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.populationStats {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.populationSnapshot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.populationSnapshot div {
+  padding: 12px;
+  border-radius: 14px;
+  background: #f4f8f5;
+  border: 1px solid #dce9df;
+  display: grid;
+  gap: 6px;
+}
+
+.populationSnapshot span {
+  color: #57766b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.populationSnapshot strong {
+  color: #12201d;
+  font-size: 18px;
+}
+
+.ecosystemRing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7fbf8;
+  border: 1px solid #dce9df;
+  border-radius: 18px;
+}
+
+.ecosystemRingSvg {
+  height: 360px;
+  border: 0;
+  background: transparent;
+}
+
+.ecosystemAnatomyGrid {
+  align-items: stretch;
+}
+
+.ecosystemAnatomyFrame {
+  display: grid;
+  gap: 12px;
+}
+
+.ecosystemBodySvg {
+  width: 100%;
+  height: 340px;
+  display: block;
+  border: 1px solid #dce9df;
+  border-radius: 18px;
+  background: #f7fbf8;
+}
+
+.ecosystemBodyOutline {
+  fill: #eef5f1;
+  stroke: #bfd3c7;
+  stroke-width: 3;
+}
+
+.ecosystemBodyOutlineSoft {
+  fill: none;
+  stroke: #d7e7dc;
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.ecosystemBackdropOrgan {
+  fill: #d8eee2;
+  stroke: #9fcbb8;
+  stroke-width: 2;
+  opacity: 0.9;
+}
+
+.ecosystemBackdropLayer {
+  fill: #e9f2f0;
+  stroke: #cfe1d5;
+  stroke-width: 2;
+  opacity: 0.9;
+}
+
+.ecosystemArea {
+  cursor: pointer;
+}
+
+.ecosystemArea.selected .ecosystemAreaValue {
+  fill: #12201d;
+}
+
+.ecosystemAreaLabel,
+.ecosystemAreaValue,
+.ecosystemAreaHint,
+.ecosystemAxisLabel,
+.ecosystemMapTitle,
+.ecosystemMapSubtitle {
+  fill: #57766b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ecosystemAreaLabel {
+  font-size: 12px;
+}
+
+.ecosystemAreaValue {
+  fill: #12201d;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.ecosystemAreaHint {
+  fill: #c84d4d;
+  font-size: 11px;
+}
+
+.ecosystemAxisLabel {
+  fill: #4a665d;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ecosystemMapTitle {
+  fill: #12201d;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.ecosystemMapSubtitle {
+  fill: #64746f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ecosystemRingTrack {
+  fill: none;
+  stroke: #dce9df;
+  stroke-width: 18;
+}
+
+.ecosystemRingProgress {
+  fill: none;
+  stroke: #237457;
+  stroke-width: 18;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 180px 180px;
+}
+
+.ecosystemCore {
+  fill: #edf7f1;
+  stroke: #9fcbb8;
+  stroke-width: 2;
+}
+
+.ecosystemCoreLabel {
+  fill: #57766b;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ecosystemCoreValue {
+  fill: #12201d;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.ecosystemOrb {
+  opacity: 0.95;
+}
+
+.ecosystemOrb.pathogen { fill: #efc0b4; }
+.ecosystemOrb.immune { fill: #9fcbb8; }
+.ecosystemOrb.stress { fill: #ead9a8; }
+.ecosystemOrb.nutrients { fill: #b8d4f5; }
+
+.ecosystemSidePanel {
+  display: grid;
+  gap: 12px;
+}
+
+.ecosystemMap {
+  display: grid;
+  gap: 12px;
+}
+
+.ecosystemMapHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.ecosystemMapHeader strong,
+.ecosystemMapHeader p {
+  margin: 0;
+}
+
+.ecosystemMapHeader p {
+  color: #57766b;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.ecosystemMapHeader span {
+  color: #64746f;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.ecosystemMapSvg {
+  width: 100%;
+  height: 330px;
+  display: block;
+  border: 1px solid #dce9df;
+  border-radius: 18px;
+  background: #f7fbf8;
+}
+
+.ecosystemMapTitle {
+  fill: #12201d;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes dashMove {
+  to { stroke-dashoffset: -44; }
+}
+
 p { color: #2c3b37; line-height: 1.58; }
 .muted { color: #64746f; font-size: 14px; }
 .summary { font-size: 17px; }
@@ -720,8 +1297,19 @@ p { color: #2c3b37; line-height: 1.58; }
 .axisLabel { font-size: 13px; font-weight: 800; fill: #57766b; }
 
 @media (max-width: 900px) {
-  .hero, .grid, .controlPanel, .searchPanel, .twoCols { grid-template-columns: 1fr; }
+  .hero, .grid, .controlPanel, .searchPanel, .twoCols, .proteinVisualGrid, .populationVisualGrid, .ecosystemVisualGrid, .cellVisualLayout, .ecosystemSidePanel { grid-template-columns: 1fr; }
   .card.wide { grid-column: auto; }
+  .visualPanelHeader,
+  .populationSnapshot {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+  .visualMetaStack {
+    justify-items: start;
+  }
+  .ecosystemMapHeader {
+    flex-direction: column;
+  }
 }
 
 /* Make all main simulator cards the same width */
