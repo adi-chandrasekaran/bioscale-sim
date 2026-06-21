@@ -62,6 +62,26 @@ pytest -q
 For local Python linting, install the dev dependency listed in `backend/requirements-dev.txt`
 and run `ruff check .` from `backend/`.
 
+If you want the AI chatbot to work locally, install Ollama and start a model:
+
+```bash
+ollama serve
+ollama pull llama3.2
+```
+
+Then create `backend/.env` from `backend/.env.example` and ensure it contains:
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+```
+
+If you are using Docker Compose with the bundled Ollama service, set:
+
+```bash
+OLLAMA_BASE_URL=http://ollama:11434
+```
+
 ## Run frontend
 
 In another terminal:
@@ -103,25 +123,32 @@ curl -X POST http://localhost:8000/api/simulate \
   -d '{"disease":"cancer","gene":"TP53","mutation":"p.R175H","steps":60,"initial_mutated_fraction":0.02}'
 ```
 
-## AI chatbot
+## Docker
 
-The in-app `Ask AI` drawer is backed by the backend `/api/ai/chat` endpoint and uses a local Ollama model.
-
-To enable it locally, install Ollama, start it, and pull a model:
+The repository includes Docker scaffolding for local orchestration:
 
 ```bash
-ollama serve
-ollama pull llama3.2
+docker compose up --build
 ```
 
-Then create `backend/.env` from `backend/.env.example` and use:
+That starts:
+
+- `backend` on `http://localhost:8000`
+- `frontend` on `http://localhost:5173`
+
+If you want a local Ollama container instead of the host process, start the optional profile:
 
 ```bash
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
+docker compose --profile ollama up --build
 ```
 
-The backend auto-loads `backend/.env`, `backend/.env.local`, `.env`, and `.env.local` on startup.
+Then pull the model inside the Ollama container or on your host machine.
+
+If you prefer to use a host-run Ollama with Docker Compose, set:
+
+```bash
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
 
 ## Research angle
 

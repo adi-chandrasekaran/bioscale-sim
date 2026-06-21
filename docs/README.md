@@ -16,6 +16,16 @@ The UI help catalog is intentionally kept in one file so the app can render pane
 
 The AI chatbot is not stored in this file. It is a runtime feature backed by the app's `/api/ai/chat` endpoint, the current simulation context, and a local Ollama model running on the backend machine.
 
+## Deployment Prep
+
+Docker scaffolding lives at the repo root:
+
+- [`docker-compose.yml`](docker-compose.yml)
+- [`backend/Dockerfile`](backend/Dockerfile)
+- [`frontend/Dockerfile`](frontend/Dockerfile)
+
+The current compose file is intended for local orchestration and keeps the frontend and backend split cleanly for later Fly.io deployment work.
+
 ## Roadmap
 
 - [Research roadmap](./research-roadmap.md)
