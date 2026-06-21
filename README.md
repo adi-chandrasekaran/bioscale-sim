@@ -150,6 +150,20 @@ If you prefer to use a host-run Ollama with Docker Compose, set:
 OLLAMA_BASE_URL=http://host.docker.internal:11434
 ```
 
+## Fly.io Deployment
+
+The repo is also prepared for Fly.io deployment with GitHub Actions.
+
+- Backend Fly config: [`backend/fly.toml`](backend/fly.toml)
+- Frontend Fly config: [`frontend/fly.toml`](frontend/fly.toml)
+- Deployment guide: [`docs/roadmap/fly-deployment.md`](docs/roadmap/fly-deployment.md)
+
+The planned CI/CD flow is:
+
+1. run backend tests and frontend build on every push and pull request to `main`
+2. deploy backend and frontend to Fly on pushes to `main`
+3. keep Ollama local-only for now, or replace it later with a hosted model service if you want production AI
+
 ## Research angle
 
 Possible paper title:

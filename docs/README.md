@@ -23,8 +23,11 @@ Docker scaffolding lives at the repo root:
 - [`docker-compose.yml`](docker-compose.yml)
 - [`backend/Dockerfile`](backend/Dockerfile)
 - [`frontend/Dockerfile`](frontend/Dockerfile)
+- [`backend/fly.toml`](backend/fly.toml)
+- [`frontend/fly.toml`](frontend/fly.toml)
+- [Fly deployment plan](./roadmap/fly-deployment.md)
 
-The current compose file is intended for local orchestration and keeps the frontend and backend split cleanly for later Fly.io deployment work.
+The current compose file is intended for local orchestration and keeps the frontend and backend split cleanly for Fly.io deployment work.
 
 ## Roadmap
 
