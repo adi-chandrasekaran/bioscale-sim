@@ -6,6 +6,7 @@ primary_region = "iad"
 
   [build.args]
     VITE_API_BASE = "https://bioscale-sim-backend.fly.dev"
+    NGINX_CONF = "nginx.fly.conf"
 
 [http_service]
   internal_port = 80

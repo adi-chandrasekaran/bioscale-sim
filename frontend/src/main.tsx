@@ -372,6 +372,11 @@ function App() {
           <p className="subtitle">
             Search diseases, genes, and mutations like a research search engine. External databases provide biological evidence; the simulator converts selected evidence into simplified model assumptions and computed outputs.
           </p>
+          <div className="heroLinks" aria-label="Project links">
+            <a href="https://github.com/adi-chandrasekaran/bioscale-sim" target="_blank" rel="noreferrer">
+              View on GitHub
+            </a>
+          </div>
           <p className="evidenceModelBanner">
             <strong>Evidence vs Model:</strong> External databases provide biological evidence. The simulator converts selected evidence into simplified model assumptions and computed outputs. Research prototype only, not a diagnostic tool.
           </p>

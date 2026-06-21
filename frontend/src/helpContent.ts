@@ -1,4 +1,4 @@
-import helpContent from "../../docs/ui-help.json";
+import helpContent from "./ui-help.json";
 
 export type TooltipHelp = {
   title?: string;

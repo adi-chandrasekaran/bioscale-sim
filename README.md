@@ -6,6 +6,11 @@ A student-friendly computational biology MVP that links:
 
 This project is intentionally modular. Each layer is a small scientific model with structured inputs and outputs, so you can expand one layer at a time into a research paper.
 
+## Links
+
+- Live demo: [https://bioscale-sim-frontend.fly.dev](https://bioscale-sim-frontend.fly.dev)
+- Source code: [https://github.com/adi-chandrasekaran/bioscale-sim](https://github.com/adi-chandrasekaran/bioscale-sim)
+
 ## What it does
 
 The default demo models a cancer/p53 case study:

@@ -52,6 +52,33 @@ h1 {
   max-width: 760px;
 }
 
+.heroLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.heroLinks a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid #b9dcc8;
+  background: #ffffff;
+  color: #12201d;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(18, 32, 29, 0.06);
+}
+
+.heroLinks a:hover {
+  background: #edf7f1;
+  border-color: #8cc5a6;
+}
+
 .disclaimerBanner {
   margin: 14px 0 0;
   padding: 10px 14px;
