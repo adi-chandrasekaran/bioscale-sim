@@ -102,6 +102,37 @@ h1 {
   padding: 18px;
 }
 
+.simulatorTabs {
+  position: sticky;
+  top: 12px;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 22px 0 0;
+  padding: 6px;
+  border: 1px solid #cfe1d5;
+  border-radius: 18px;
+  background: rgba(237, 247, 241, 0.94);
+  box-shadow: 0 12px 30px rgba(18, 32, 29, 0.09);
+  backdrop-filter: blur(14px);
+}
+
+.simulatorTabs button {
+  min-height: 46px;
+  padding: 10px 14px;
+  border-radius: 13px;
+  background: transparent;
+  color: #437764;
+  box-shadow: none;
+}
+
+.simulatorTabs button.active {
+  background: #12201d;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(18, 32, 29, 0.18);
+}
+
 .pipeStep {
   background: #12201d;
   color: #ffffff;
@@ -459,6 +490,78 @@ button:disabled { opacity: 0.55; cursor: wait; }
 .card.wide {
   grid-column: 1 / -1;
 }
+
+.secondarySimulator { margin-top: 4px; }
+.secondarySimulator .simulatorPanel { min-width: 0; }
+.panelEyebrow { margin-bottom: 6px; }
+.simulatorPanel > h2 { margin-bottom: 18px; }
+
+.contextStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.contextStrip span {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #dce9df;
+  border-radius: 14px;
+  background: #f7fbf8;
+  color: #64746f;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.contextStrip b { color: #12201d; font-size: 14px; letter-spacing: normal; text-transform: none; overflow-wrap: anywhere; }
+
+.sliderGrid, .interventionControls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.simSlider, .interventionControls label { display: grid; gap: 9px; color: #57766b; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+.simSlider span { display: flex; justify-content: space-between; gap: 12px; }
+.simSlider strong { color: #12201d; }
+.simSlider input[type="range"] { padding: 0; accent-color: #237457; }
+.primaryAction { align-self: flex-start; margin-top: 18px; }
+
+.cloneGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.cloneCard { padding: 16px; border-radius: 18px; border: 1px solid #dce9df; background: linear-gradient(145deg, #ffffff, #edf7f1); }
+.cloneCard p { margin: 10px 0 0; color: #44534f; font-size: 13px; line-height: 1.5; }
+.cloneBadge { display: inline-flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 999px; background: #12201d; color: #fff; font-size: 11px; }
+.miniMetricGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.metricGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.metricCard { display: grid; align-content: start; gap: 7px; padding: 13px; border-radius: 15px; border: 1px solid #dce9df; background: #f7fbf8; min-width: 0; }
+.metricCard > span { color: #57766b; font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
+.metricCard > strong { color: #12201d; font-size: 19px; overflow-wrap: anywhere; }
+.metricCard > small { color: #64746f; line-height: 1.4; }
+.metricCard .barOuter { margin-top: 3px; }
+
+.panelExplanation, .reportText { margin: 16px 0 0; color: #44534f; line-height: 1.65; }
+.researchDisclaimer, .globalDisclaimer { color: #6a5520; background: #fff8e8; border: 1px solid #ead9a8; border-radius: 12px; padding: 10px 12px; font-size: 12px; font-weight: 700; }
+.globalDisclaimer { margin: 22px 0 0; text-align: center; }
+.wideEmpty { grid-column: 1 / -1; }
+
+.miniChartWrap { padding: 14px; border: 1px solid #dce9df; border-radius: 18px; background: #f7fbf8; }
+.miniLineChart { display: block; width: 100%; min-height: 220px; }
+.chartLegend { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 8px; color: #57766b; font-size: 12px; font-weight: 800; }
+.chartLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.chartLegend i { width: 20px; height: 4px; border-radius: 999px; }
+
+.evolutionTree { display: grid; justify-items: center; padding: 12px 0; }
+.treeParent, .treeChildren > div { min-width: 190px; padding: 15px; border-radius: 16px; background: #12201d; color: #fff; text-align: center; font-weight: 900; }
+.evolutionTree small { display: block; margin-top: 5px; color: #b9dcc8; font-size: 11px; font-weight: 600; }
+.treeStem { width: 2px; height: 32px; background: #8cc5a6; }
+.treeChildren { position: relative; display: flex; gap: 40px; }
+.treeChildren::before { content: ""; position: absolute; top: -16px; left: 25%; right: 25%; height: 2px; background: #8cc5a6; }
+.treeChildren > div { position: relative; background: #edf7f1; color: #12201d; border: 1px solid #b9dcc8; }
+.treeChildren > div::before { content: ""; position: absolute; left: 50%; top: -16px; width: 2px; height: 16px; background: #8cc5a6; }
+.treeChildren small { color: #57766b; }
+
+.baselineMissing { padding: 22px; border: 1px dashed #b9dcc8; border-radius: 18px; background: #f7fbf8; text-align: center; }
+.baselineMissing p { margin: 8px auto 0; max-width: 680px; color: #64746f; line-height: 1.6; }
+.interventionControls label > span { color: #57766b; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+.cloneResponse { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.cloneResponse > * { padding: 7px 10px; border-radius: 999px; background: #edf7f1; color: #355348; font-size: 12px; }
 
 h2 {
   margin: 0 0 14px;
@@ -1747,6 +1850,14 @@ p { color: #2c3b37; line-height: 1.58; }
   .ecosystemMapHeader {
     flex-direction: column;
   }
+}
+
+@media (max-width: 700px) {
+  .simulatorTabs { position: static; grid-template-columns: 1fr; }
+  .contextStrip, .sliderGrid, .interventionControls, .cloneGrid { grid-template-columns: 1fr; }
+  .treeChildren { width: 100%; gap: 12px; }
+  .treeParent, .treeChildren > div { min-width: 0; width: 100%; }
+  .miniMetricGrid { grid-template-columns: 1fr; }
 }
 
 /* Make all main simulator cards the same width */

@@ -245,3 +245,46 @@ export type SimulationResult = {
   disclaimer: string;
   evidence?: NormalizedEvidence;
 };
+
+export type EvolutionClone = {
+  name: string;
+  parent: string | null;
+  mutations: string[];
+  growth_rate: number;
+  death_rate: number;
+  repair_ability: number;
+  stress_resistance: number;
+  immune_evasion: number;
+  fitness_score: number;
+};
+
+export type EvolutionResult = {
+  clones: EvolutionClone[];
+  timeline: Array<{ step: number; clone_a: number; clone_b: number; clone_c: number }>;
+  tree: Record<string, string[]>;
+  summary: {
+    dominant_clone: string;
+    final_clone_fractions: Record<string, number>;
+    diversity_score: number;
+    clonal_expansion: boolean;
+    explanation: string;
+  };
+  disclaimer: string;
+};
+
+export type InterventionResult = {
+  modified_biology: Record<string, number>;
+  comparison: {
+    baseline_mutated_fraction: number;
+    post_intervention_mutated_fraction: number;
+    baseline_ecosystem_risk: number;
+    post_intervention_ecosystem_risk: number;
+    percent_change: number;
+  };
+  timeline: Array<{ step: number; before: number; after: number }>;
+  clone_response: Array<{ clone: string; suppression: number }>;
+  explanation: string;
+  report: string;
+  outcome: "helped" | "little effect" | "resistance risk";
+  disclaimer: string;
+};

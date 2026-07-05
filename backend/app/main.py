@@ -30,6 +30,8 @@ from app.services.search_service import (
 from app.services.cell_simulator import simulate_cell
 from app.services.population_simulator import simulate_population
 from app.services.ecosystem_simulator import simulate_ecosystem
+from app.evolution_simulator import EvolutionRequest, EvolutionResult, simulate_evolution
+from app.intervention_simulator import InterventionRequest, InterventionResult, simulate_intervention
 
 app = FastAPI(
     title="BioScale Simulator API",
@@ -223,6 +225,16 @@ def simulate(req: SimulationRequest) -> SimulationResult:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/evolution", response_model=EvolutionResult)
+def evolution(req: EvolutionRequest) -> EvolutionResult:
+    return simulate_evolution(req)
+
+
+@app.post("/api/intervention", response_model=InterventionResult)
+def intervention(req: InterventionRequest) -> InterventionResult:
+    return simulate_intervention(req)
 
 
 @app.post("/api/ai/chat", response_model=AIChatResponse)

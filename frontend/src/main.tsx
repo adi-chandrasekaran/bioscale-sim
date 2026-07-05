@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
-import type { PopulationPoint, SelectedEntity, SimulationRequest, SimulationResult } from "./types";
+import type { EvolutionResult, PopulationPoint, SelectedEntity, SimulationRequest, SimulationResult } from "./types";
 import { PathwayGraph } from "./PathwayGraph";
 import { AutocompleteSearch } from "./AutocompleteSearch";
 import { CardSourceHeader, ProvenanceBadge, ProvenanceRow } from "./ProvenanceBadge";
@@ -24,8 +24,11 @@ import {
   ProteinEffectVisual,
   type CardViewMode,
 } from "./SimulationVisuals";
+import { TabSwitcher, type SimulatorTab } from "./SimulatorUI";
+import { EvolutionSimulator } from "./EvolutionSimulator";
+import { InterventionSimulator } from "./InterventionSimulator";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 const DEFAULT_DISEASE: SelectedEntity = { id: "EFO_0000311", label: "cancer" };
 const DEFAULT_GENE: SelectedEntity = { id: "TP53", label: "TP53" };
@@ -248,6 +251,7 @@ function CandidateGeneCard({
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState<SimulatorTab>("bioscale");
   const [disease, setDisease] = useState<SelectedEntity | null>(DEFAULT_DISEASE);
   const [gene, setGene] = useState<SelectedEntity | null>(DEFAULT_GENE);
   const [variant, setVariant] = useState<SelectedEntity | null>(DEFAULT_VARIANT);
@@ -259,6 +263,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [evolutionResult, setEvolutionResult] = useState<EvolutionResult | null>(null);
   const [cardViews, setCardViews] = useState<Record<"protein" | "cell" | "population" | "ecosystem", CardViewMode>>({
     protein: "summary",
     cell: "summary",
@@ -384,6 +389,8 @@ function App() {
         <Pipeline />
       </header>
 
+      <TabSwitcher value={activeTab} onChange={setActiveTab} />
+
       <section className="searchPanel">
         <AutocompleteSearch
           label="Disease"
@@ -450,13 +457,13 @@ function App() {
         </button>
       </section>
 
-      {!ready && !result && (
+      {activeTab === "bioscale" && !ready && !result && (
         <div className="emptyState">Search for a disease, gene, or mutation to begin.</div>
       )}
 
       {error && <div className="error">{error}</div>}
 
-      {result && (
+      {activeTab === "bioscale" && result && (
         <div className="grid">
           <SimulationInputPanel input={result.simulation_input} />
           <LayerCard title="1. Disease discovery → candidate gene" helpKey="diseaseDiscovery" footer="This card ranks disease-linked genes and explains which evidence supports the leading candidate.">
@@ -674,6 +681,9 @@ function App() {
           </LayerCard>
         </div>
       )}
+      {activeTab === "evolution" && <EvolutionSimulator apiBase={API_BASE} result={result} disease={disease?.label ?? ""} gene={activeGene} mutation={canonicalMutationNotation(variant)} steps={steps} onResult={setEvolutionResult} />}
+      {activeTab === "intervention" && <InterventionSimulator apiBase={API_BASE} baseline={result} evolution={evolutionResult} />}
+      <p className="globalDisclaimer">Research prototype only, not a diagnostic tool or treatment recommendation.</p>
       <AskAIPanel open={aiOpen} onOpenChange={setAiOpen} result={result} />
     </main>
   );
