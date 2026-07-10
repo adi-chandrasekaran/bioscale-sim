@@ -2,7 +2,8 @@ export type ProvenanceCategory =
   | "external_database"
   | "local_curated"
   | "simulator_assumption"
-  | "computed_model";
+  | "computed_model"
+  | "missing_evidence";
 
 export type ProvenanceEntry = {
   category: ProvenanceCategory;
@@ -10,10 +11,21 @@ export type ProvenanceEntry = {
   detail?: string;
 };
 
+export type HierarchyDatum = {
+  name: string;
+  value?: number;
+  type?: string;
+  description?: string;
+  children?: HierarchyDatum[];
+};
+
 export type SearchResultItem = {
   id: string;
   label: string;
   subtitle?: string;
+  description?: string;
+  synonyms?: string[];
+  normalized_mapping?: Record<string, unknown>;
   source: string;
   meta: Record<string, unknown>;
 };
@@ -99,11 +111,19 @@ export type SimulationInputSummary = {
   disease_id: string;
   gene_symbol: string;
   gene_id?: string;
+  uniprot_accession?: string;
+  protein_name?: string;
   mutation: string;
+  hgvs_notation?: string;
+  clinvar_variation_id?: string;
+  rsid?: string;
   protein_accession?: string;
+  alphafold_available?: boolean;
+  alphafold_confidence_label?: string;
   pathway_name?: string;
   pathway_id?: string;
   pathway_source?: string;
+  data_source_status?: Record<string, string>;
 };
 
 export type SimulationResult = {
@@ -214,6 +234,13 @@ export type SimulationResult = {
     computed_from_protein_activity?: string;
     source: string;
     provenance: Record<string, ProvenanceEntry>;
+    trait_details?: Record<string, {
+      label: string;
+      score: number;
+      confidence: number;
+      provenance: string;
+      explanation: string;
+    }>;
   };
   population_result: {
     trajectory: PopulationPoint[];
@@ -238,30 +265,150 @@ export type SimulationResult = {
     computed_from_protein_activity?: string;
     source: string;
     provenance: Record<string, ProvenanceEntry>;
+    ecosystem_hierarchy?: HierarchyDatum;
   };
   research_summary: string;
   external_evidence_available: boolean;
   evidence_notice?: string;
   disclaimer: string;
   evidence?: NormalizedEvidence;
+  reasoning?: BiologicalReasoning;
+};
+
+export type BiologicalReasoning = {
+  steps: Array<{ layer: string; evidence: string; reasoning: string; consequence: string; confidence: number; provenance: string }>;
+  causal_graph: { nodes: Array<{ id: string; label: string; confidence: number }>; edges: Array<{ source: string; target: string; label: string }> };
+  summary: string;
+};
+
+export type DigitalTwinResult = {
+  mode?: "known" | "unknown";
+  patient_profile: Record<string, unknown>;
+  normalized_symptoms?: Array<{ id: string; label: string; raw: string; source: string }>;
+  safety_warnings?: string[];
+  disease_risk_profile: Array<{ name: string; score: number; provenance: string }>;
+  differential_diagnosis?: DifferentialDiseaseRow[];
+  graph?: { nodes: Array<{ id: string; label: string; type?: string; value?: number; source?: string; description?: string }>; links: Array<{ source: string; target: string; relation?: string; weight?: number; description?: string }> };
+  category_distribution?: HierarchyDatum;
+  known_disease_panels?: Record<string, string>;
+  intervention_scenarios?: TwinInterventionScenario[];
+  mutation_interpretation: Record<string, unknown>;
+  protein_effects: Record<string, unknown>;
+  pathway_effects: Array<Record<string, unknown>>;
+  cell_state: Record<string, number>;
+  population_behaviour: Record<string, number>;
+  predicted_biological_state: { overall_risk: number; status: string };
+  affected_systems: string[];
+  potential_mechanisms: string[];
+  missing_data?: string[];
+  confidence: number;
+  evidence: Array<{ source: string; category: string; detail: string }>;
+  reasoning: string[];
+  disclaimer: string;
+};
+
+export type DifferentialDiseaseRow = {
+  rank: number;
+  disease: string;
+  disease_category: string;
+  real_world_causes_mechanism: string;
+  matching_symptoms: string[];
+  missing_or_unconfirmed_key_symptoms: string[];
+  patient_risk_factors_that_support_it: string[];
+  evidence_sources: string[];
+  confidence: number;
+  why_ranked_here: string;
+  genes?: string[];
+  pathways?: string[];
+  intervention_categories?: string[];
+  suggested_drug_options?: string[];
+  intervention_note?: string;
+};
+
+export type TwinInterventionScenario = {
+  selected_disease: string;
+  disease_category: string;
+  matching_symptoms: string[];
+  suspected_mechanisms: string[];
+  relevant_genes: string[];
+  relevant_pathways: string[];
+  evidence_sources: string[];
+  confidence_score: number;
+  suggested_intervention_categories: string[];
+  suggested_drug_options: string[];
+  note: string;
 };
 
 export type EvolutionClone = {
+  clone_id: string;
+  clone_name: string;
+  parent_clone_id: string | null;
+  generation_order: number;
+  generation_step: number;
+  inherited_mutations: string[];
+  new_mutation_or_development: string;
+  evidence_basis: string;
+  database_sources_used: string[];
+  missing_evidence: string[];
   name: string;
   parent: string | null;
   mutations: string[];
   growth_rate: number;
   death_rate: number;
+  repair_capacity: number;
   repair_ability: number;
   stress_resistance: number;
   immune_evasion: number;
+  nutrient_efficiency: number;
+  pathway_disruption: number;
   fitness_score: number;
+  starting_share: number;
+  final_share: number;
+  peak_share: number;
+  whether_it_expanded: boolean;
+  whether_it_declined: boolean;
+  why_it_emerged: string;
+  why_it_expanded_or_declined: string;
+  biological_interpretation: string;
+  confidence_score: number;
+  provenance_labels: string[];
+};
+
+export type EvolutionTimelinePoint = {
+  step: number;
+  clone_a: number;
+  clone_b: number;
+  clone_c: number;
+  clone_fractions?: Record<string, number>;
+  clone_populations?: Record<string, number>;
+  major_events?: string[];
+};
+
+export type EvolutionEvent = {
+  step: number;
+  event_type: string;
+  clone_id: string;
+  clone_name: string;
+  description: string;
 };
 
 export type EvolutionResult = {
   clones: EvolutionClone[];
-  timeline: Array<{ step: number; clone_a: number; clone_b: number; clone_c: number }>;
+  timeline: EvolutionTimelinePoint[];
   tree: Record<string, string[]>;
+  clone_tree?: HierarchyDatum;
+  clone_composition?: HierarchyDatum;
+  final_composition?: HierarchyDatum;
+  major_events?: EvolutionEvent[];
+  evidence_summary?: {
+    sources_used?: string[];
+    database_evidence?: string[];
+    simulator_context?: string[];
+    missing_evidence?: string[];
+  };
+  model_assumptions?: string[];
+  uncertainty_summary?: string;
+  student_explanation?: string;
   summary: {
     dominant_clone: string;
     final_clone_fractions: Record<string, number>;
@@ -270,6 +417,8 @@ export type EvolutionResult = {
     explanation: string;
   };
   disclaimer: string;
+  confidence: number;
+  provenance: string;
 };
 
 export type InterventionResult = {
@@ -280,11 +429,65 @@ export type InterventionResult = {
     baseline_ecosystem_risk: number;
     post_intervention_ecosystem_risk: number;
     percent_change: number;
+    net_effect?: number;
+    effective_exposure?: number;
   };
-  timeline: Array<{ step: number; before: number; after: number }>;
-  clone_response: Array<{ clone: string; suppression: number }>;
+  timeline: Array<{
+    step: number;
+    before: number;
+    after: number;
+    affected_population?: number;
+    normal_population?: number;
+    immune_clearance?: number;
+    inflammation?: number;
+    dominant_clone_fraction?: number;
+    pathway_disruption?: number;
+    ecosystem_risk?: number;
+  }>;
+  clone_response: Array<{ clone: string; suppression: number; fitness_after?: number }>;
+  before_after_metrics?: Array<{
+    label: string;
+    before: number;
+    after: number;
+    delta: number;
+    direction: "increased" | "decreased" | "unchanged";
+    magnitude: number;
+    formula_rule: string;
+    provenance: string;
+    explanation: string;
+  }>;
+  mechanism_graph?: {
+    nodes: Array<{ id: string; label: string; type?: string; value?: number; source?: string; description?: string }>;
+    links: Array<{ source: string; target: string; relation?: string; weight?: number; description?: string }>;
+  };
+  pathway_before_after?: { before: Record<string, number>; after: Record<string, number> };
+  cell_before_after?: { before: Record<string, number>; after: Record<string, number> };
+  clone_timeline_before_after?: InterventionResult["timeline"];
+  ecosystem_before_after?: {
+    site: string;
+    before: HierarchyDatum;
+    after: HierarchyDatum;
+    status: string;
+    description: string;
+  };
+  evidence_summary?: {
+    drug?: string;
+    normalized_drug?: string;
+    mechanism?: string;
+    known_targets?: string[];
+    clinical_status?: string;
+    evidence_level?: string;
+    pharmacodynamics?: Record<string, unknown>;
+    sources?: string[];
+    available?: boolean;
+    raw?: Record<string, unknown>;
+  };
+  student_explanation?: Record<string, string>;
+  validation_needs?: string[];
   explanation: string;
   report: string;
   outcome: "helped" | "little effect" | "resistance risk";
   disclaimer: string;
+  confidence: number;
+  provenance: string;
 };

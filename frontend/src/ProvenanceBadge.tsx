@@ -8,6 +8,7 @@ const CATEGORY_LABELS: Record<ProvenanceCategory, string> = {
   local_curated: "Local curated knowledge",
   simulator_assumption: "Simulator assumption",
   computed_model: "Computed model output",
+  missing_evidence: "Missing/unavailable evidence",
 };
 
 const CATEGORY_SHORT: Record<ProvenanceCategory, string> = {
@@ -15,6 +16,7 @@ const CATEGORY_SHORT: Record<ProvenanceCategory, string> = {
   local_curated: "Local KB",
   simulator_assumption: "Assumption",
   computed_model: "Computed",
+  missing_evidence: "Unavailable",
 };
 
 type ProvenanceBadgeProps = {

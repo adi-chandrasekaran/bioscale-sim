@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
-import type { EvolutionResult, PopulationPoint, SelectedEntity, SimulationRequest, SimulationResult } from "./types";
+import type { HierarchyDatum, PopulationPoint, SelectedEntity, SimulationRequest, SimulationResult } from "./types";
 import { PathwayGraph } from "./PathwayGraph";
 import { AutocompleteSearch } from "./AutocompleteSearch";
 import { CardSourceHeader, ProvenanceBadge, ProvenanceRow } from "./ProvenanceBadge";
@@ -9,10 +9,8 @@ import { ConciseSummary, RawEvidence } from "./Summary";
 import { PanelHelpAccordion, InfoTooltip } from "./Help";
 import { AskAIPanel } from "./AskAI";
 import {
-  buildCandidateHelp,
   buildDefinitionHelp,
   buildFieldHelp,
-  buildScoreLabelHelp,
   help,
   type TooltipHelp,
 } from "./helpContent";
@@ -21,18 +19,18 @@ import {
   CellPhenotypeVisual,
   EcosystemVisual,
   PopulationDynamicsVisual,
-  ProteinEffectVisual,
   type CardViewMode,
 } from "./SimulationVisuals";
-import { TabSwitcher, type SimulatorTab } from "./SimulatorUI";
+import { TabSwitcher } from "./SimulatorUI";
 import { EvolutionSimulator } from "./EvolutionSimulator";
 import { InterventionSimulator } from "./InterventionSimulator";
+import { SimulationProvider, useSimulationContext } from "./SimulationContext";
+import { PatientDigitalTwin } from "./PatientDigitalTwin";
+import { ReasoningPanel } from "./ReasoningPanel";
+import { CirclePackingChart } from "./components/visualizations/CirclePackingChart";
+import { ProteinStructurePanel } from "./components/ProteinStructurePanel";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
-
-const DEFAULT_DISEASE: SelectedEntity = { id: "EFO_0000311", label: "cancer" };
-const DEFAULT_GENE: SelectedEntity = { id: "TP53", label: "TP53" };
-const DEFAULT_VARIANT: SelectedEntity = { id: "p.R175H", label: "p.R175H", meta: { notation: "p.R175H" } };
 
 class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
   constructor(props: { children: React.ReactNode }) {
@@ -66,6 +64,26 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 
 function fmt(value: number) {
   return Number.isFinite(value) ? value.toFixed(2) : "—";
+}
+
+function fallbackEcosystemHierarchy(result: SimulationResult): HierarchyDatum {
+  return {
+    name: `${result.simulation_input.disease_name} ecosystem`,
+    type: "ecosystem",
+    description: "Fallback visual hierarchy derived from the ecosystem scores.",
+    children: [
+      { name: "Tumor-like burden", value: Math.max(result.ecosystem_result.tumor_like_burden, 0.04), type: "population", description: "Modeled burden from the altered population." },
+      { name: "Immune clearance", value: Math.max(result.ecosystem_result.immune_clearance, 0.04), type: "immune", description: "Modeled immune containment." },
+      { name: "Inflammation", value: Math.max(result.ecosystem_result.inflammation, 0.04), type: "inflammation", description: "Modeled inflammatory signaling." },
+      { name: "Nutrient stress", value: Math.max(result.ecosystem_result.nutrient_stress, 0.04), type: "nutrient", description: "Modeled local nutrient stress." },
+    ],
+  };
+}
+
+function candidateDefinition(candidate: SimulationResult["disease_discovery"]["candidates"][number], diseaseName?: string) {
+  const base = candidate.function_summary || candidate.summary || candidate.reasons?.[0] || `${candidate.symbol} is a gene included in this disease-linked candidate list.`;
+  const diseaseLine = diseaseName ? `In this run, it is being evaluated in the context of ${diseaseName}.` : "";
+  return [base, diseaseLine].filter(Boolean).join(" ");
 }
 
 function canonicalGeneSymbol(entity: SelectedEntity | null) {
@@ -112,13 +130,28 @@ function ScoreBar({
   value,
   provenance,
   help,
+  reference,
 }: {
   label: string;
   value: number;
   provenance?: SimulationResult["protein_effect"]["provenance"][string];
   help?: TooltipHelp;
+  reference?: number;
 }) {
-  const tooltip = help ?? buildScoreLabelHelp(label, value);
+  const baseline = reference ?? (label.toLowerCase().startsWith("remaining") ? 1 : 0.5);
+  const delta = value - baseline;
+  const direction = delta >= 0 ? "increase" : "decrease";
+  const tooltip = help ?? {
+    title: label,
+    summary: `If this occurs, there is a probability that ${label} will ${direction} by ${Math.abs(delta * 100).toFixed(0)}%.`,
+    details: [
+      `Current modeled probability is ${(value * 100).toFixed(0)}%.`,
+      `Reference value is ${(baseline * 100).toFixed(0)}%.`,
+      `${label} is computed from the current disease, gene, mutation, protein, pathway, and downstream simulator outputs for this run.`,
+    ],
+    examples: [],
+  };
+  const directionClass = delta < 0 ? "decreased" : "increased";
   return (
     <div className="scoreBar">
       <div className="scoreHeader">
@@ -131,7 +164,7 @@ function ScoreBar({
           {provenance && <ProvenanceBadge entry={provenance} compact />}
         </div>
       </div>
-      <div className="barOuter"><div className="barInner" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} /></div>
+      <div className="barOuter"><div className={`barInner ${directionClass}`} style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} /></div>
     </div>
   );
 }
@@ -194,19 +227,40 @@ function ComputedFromLine({ gene, pathway, proteinActivity }: { gene?: string; p
 }
 
 function SimulationInputPanel({ input }: { input: SimulationResult["simulation_input"] }) {
+  const dataSourceRows = Object.entries(input.data_source_status ?? {});
   return (
     <section className="simulationInputPanel">
       <div className="cardTitleRow">
-        <h3>Current simulation input</h3>
+        <h3>Current Biological Context</h3>
         <PanelHelpAccordion help={help.panels.simulationInput} />
       </div>
       <div className="simInputGrid">
         <div><span>Disease</span><strong>{input.disease_name}</strong><em>{input.disease_id}</em></div>
         <div><span>Gene</span><strong>{input.gene_symbol}</strong><em>{input.gene_id || "—"}</em></div>
-        <div><span>Mutation</span><strong>{input.mutation}</strong></div>
-        <div><span>Protein</span><strong>{input.protein_accession || "—"}</strong></div>
+        <div><span>Mutation</span><strong>{input.mutation}</strong><em>{input.clinvar_variation_id ? `ClinVar ${input.clinvar_variation_id}` : input.rsid || "No ClinVar/rsID match"}</em></div>
+        <div><span>Protein</span><strong>{input.protein_name || input.protein_accession || "—"}</strong><em>{input.uniprot_accession || input.protein_accession || "—"}</em></div>
+        <div><span>AlphaFold</span><strong>{input.alphafold_available ? "Available" : "Unavailable"}</strong><em>{input.alphafold_confidence_label || "confidence unknown"}</em></div>
         <div><span>Pathway</span><strong>{input.pathway_name || "—"}</strong><em>{input.pathway_id || "—"}</em></div>
         <div><span>Pathway source</span><strong>{input.pathway_source || "—"}</strong></div>
+      </div>
+      {dataSourceRows.length > 0 && (
+        <div className="sourceStatusGrid" aria-label="Database source status">
+          {dataSourceRows.map(([source, status]) => (
+            <span key={source} className={status === "available" ? "sourceStatus available" : "sourceStatus unavailable"}>
+              {source}: {status}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="meaningGrid">
+        <div>
+          <strong>What this means biologically</strong>
+          <p>This is the shared disease, gene, mutation, protein, structure, and pathway context used by every simulator tab.</p>
+        </div>
+        <div>
+          <strong>How this was computed</strong>
+          <p>Identifiers are normalized from search selections and database adapters; missing evidence is marked unavailable instead of guessed.</p>
+        </div>
       </div>
     </section>
   );
@@ -223,7 +277,7 @@ function CandidateGeneCard({
   diseaseName?: string;
   onSelect: () => void;
 }) {
-  const tooltip = buildCandidateHelp(candidate, diseaseName);
+  const definition = candidateDefinition(candidate, diseaseName);
   return (
     <button
       type="button"
@@ -232,38 +286,57 @@ function CandidateGeneCard({
     >
       <div className="candidateMain">
         <strong>{candidate.symbol}</strong>
-        <span>{fmt(candidate.score)}</span>
       </div>
-      <ConciseSummary
-        text={candidate.function_summary || candidate.summary || candidate.reasons?.[0] || `${candidate.symbol} is ranked for this disease.`}
-        className="candidateSummary"
-      />
       <div className="candidateHoverBubble" aria-hidden="true">
-        <strong>{tooltip.title ?? candidate.symbol}</strong>
-        <p>{tooltip.summary}</p>
-        {tooltip.details.slice(0, 2).map((detail) => (
-          <p key={detail}>{detail}</p>
-        ))}
+        <strong>{candidate.symbol}</strong>
+        <p>{definition}</p>
+        <p>Model ranking score for this disease context: {fmt(candidate.score)}.</p>
       </div>
       <ProvenanceBadge entry={candidate.provenance.score ?? { category: "external_database", source: candidate.source }} compact />
     </button>
   );
 }
 
+function LearningPanel({ result }: { result: SimulationResult }) {
+  const assumptions = [
+    "Activity, stability, binding, pathway propagation, population growth, and ecosystem risk are simulator assumptions or computed model outputs.",
+    "AlphaFold is used only as structural context; it does not prove pathogenicity.",
+    "External database gaps are shown as unavailable instead of being filled with fake evidence.",
+  ];
+  const validation = [
+    "clinical-grade variant curation",
+    "validated disease cohorts",
+    "bench or literature support for pathway effects",
+    "expert clinical review before any diagnostic use",
+  ];
+  return (
+    <LayerCard title="Research Student Learning Panel" className="wide" footer="This panel explains the run in teaching language and separates evidence from model assumptions.">
+      <div className="learningGrid">
+        <div><span>What is this gene?</span><p>{result.selected_candidate.function_summary || result.selected_candidate.summary || `${result.simulation_input.gene_symbol} is the selected gene for this run.`} In this simulation it is treated as the molecular starting point that connects the disease search result to the mutation, protein, pathway, cell, population, and ecosystem layers.</p></div>
+        <div><span>What is this mutation?</span><p>{result.mutation_result.summary || `${result.mutation_result.mutation} is interpreted as ${result.mutation_result.kind}.`} The simulator converts that variant class into activity, stability, and binding multipliers so the mutation can affect downstream biology.</p></div>
+        <div><span>What is this protein/domain?</span><p>{result.protein_effect.function_summary || result.protein_effect.summary || `${result.protein_effect.protein_name} is the selected protein.`} {result.protein_effect.domain_hit ? `The mutation maps to ${result.protein_effect.domain_hit}, so the model treats that region as the affected functional context.` : "No specific domain hit was available, so the model uses the mutation-level functional effect."}</p></div>
+        <div><span>What is this pathway?</span><p>{result.pathway_result.summary || result.pathway_result.description || "The pathway layer propagates the protein effect through connected biological steps."} Nodes in the pathway represent biological steps; edges represent modeled activation or inhibition between those steps.</p></div>
+        <div><span>What did the cell model conclude?</span><p>Proliferation {fmt(result.cell_phenotype.proliferation_rate)}, apoptosis {fmt(result.cell_phenotype.apoptosis_rate)}, repair {fmt(result.cell_phenotype.repair_capacity)}, and genomic instability {fmt(result.cell_phenotype.genomic_instability)} are combined to describe the altered cell state.</p></div>
+        <div><span>What did the tissue model conclude?</span><p>The final mutated fraction is {fmt(result.population_result.final_mutated_fraction)} and ecosystem risk is {fmt(result.ecosystem_result.ecosystem_risk_score)}. These are computed simulator outputs that show how altered cells may affect the local tissue environment.</p></div>
+        <div><span>What is being assumed?</span><ul>{assumptions.map((item) => <li key={item}>{item}</li>)}</ul></div>
+        <div><span>What would need validation?</span><ul>{validation.map((item) => <li key={item}>{item}</li>)}</ul></div>
+      </div>
+    </LayerCard>
+  );
+}
+
 function App() {
-  const [activeTab, setActiveTab] = useState<SimulatorTab>("bioscale");
-  const [disease, setDisease] = useState<SelectedEntity | null>(DEFAULT_DISEASE);
-  const [gene, setGene] = useState<SelectedEntity | null>(DEFAULT_GENE);
-  const [variant, setVariant] = useState<SelectedEntity | null>(DEFAULT_VARIANT);
-  const [pathway, setPathway] = useState<SelectedEntity | null>(null);
-  const [steps, setSteps] = useState(60);
-  const [useExternal, setUseExternal] = useState(true);
-  const [result, setResult] = useState<SimulationResult | null>(null);
+  const { activeTab, setActiveTab, disease, setDisease, gene, setGene, variant, setVariant, pathway, setPathway,
+    protein, setProtein, setSharedContext, steps, setSteps, useExternal, setUseExternal, result, setResult,
+    evolutionResult, setEvolutionResult, setPersonalizedResult, interventionScenario, setInterventionScenario, setInterventionResult } = useSimulationContext();
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = window.localStorage.getItem("bioscale-theme");
+    return saved === "dark" ? "dark" : "light";
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
-  const [evolutionResult, setEvolutionResult] = useState<EvolutionResult | null>(null);
   const [cardViews, setCardViews] = useState<Record<"protein" | "cell" | "population" | "ecosystem", CardViewMode>>({
     protein: "summary",
     cell: "summary",
@@ -296,7 +369,31 @@ function App() {
       : typeof result?.evidence?.gene?.summary === "string"
         ? result.evidence.gene.summary
         : undefined;
+  const ecosystemHierarchy = result?.ecosystem_result.ecosystem_hierarchy ?? (result ? fallbackEcosystemHierarchy(result) : undefined);
   const ready = Boolean(disease && activeGene && variant);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("bioscale-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    setSharedContext((current) => ({
+      ...current,
+      diseaseName: disease?.label || "",
+      diseaseId: disease?.id || "",
+      geneSymbol: activeGene,
+      ensemblGeneId: typeof gene?.meta?.ensembl_id === "string" ? gene.meta.ensembl_id : current.ensemblGeneId,
+      mutation: canonicalMutationNotation(variant),
+      hgvsNotation: canonicalMutationNotation(variant),
+      clinvarVariationId: typeof variant?.meta?.clinvar_id === "string" ? variant.meta.clinvar_id : current.clinvarVariationId,
+      rsid: typeof variant?.meta?.rsid === "string" ? variant.meta.rsid : current.rsid,
+      uniprotAccession: typeof protein?.meta?.accession === "string" ? protein.meta.accession : current.uniprotAccession,
+      proteinName: protein?.label || current.proteinName,
+      reactomePathwayId: pathway?.id || "",
+      pathwayName: pathway?.label || "",
+    }));
+  }, [activeGene, disease?.id, disease?.label, gene?.meta, pathway?.id, pathway?.label, protein?.label, protein?.meta, setSharedContext, variant]);
 
   const runSimulation = useCallback(async () => {
     if (!disease || !gene || !variant || !activeGene) {
@@ -339,6 +436,24 @@ function App() {
       if (controller.signal.aborted) return;
       if (!res.ok) throw new Error(json.detail ?? "Simulation failed");
       setResult(json);
+      setSharedContext((current) => ({
+        ...current,
+        diseaseName: json.simulation_input?.disease_name || disease.label,
+        diseaseId: json.simulation_input?.disease_id || disease.id,
+        geneSymbol: json.simulation_input?.gene_symbol || geneSymbol,
+        ensemblGeneId: json.simulation_input?.gene_id || "",
+        uniprotAccession: json.simulation_input?.uniprot_accession || json.protein_effect?.protein_id || "",
+        proteinName: json.simulation_input?.protein_name || json.protein_effect?.protein_name || "",
+        mutation: json.simulation_input?.mutation || mutationNotation,
+        hgvsNotation: json.simulation_input?.hgvs_notation || mutationNotation,
+        clinvarVariationId: json.simulation_input?.clinvar_variation_id || "",
+        rsid: json.simulation_input?.rsid || "",
+        reactomePathwayId: json.simulation_input?.pathway_id || "",
+        pathwayName: json.simulation_input?.pathway_name || "",
+      }));
+      if (json.protein_effect?.protein_id) {
+        setProtein({ id: json.protein_effect.protein_id, label: json.protein_effect.protein_name, meta: { accession: json.protein_effect.protein_id } });
+      }
     } catch (err) {
       if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Simulation failed");
@@ -347,7 +462,7 @@ function App() {
         setLoading(false);
       }
     }
-  }, [activeGene, disease, gene, variant, pathway?.id, pathway?.label, steps, useExternal]);
+  }, [activeGene, disease, gene, variant, pathway?.id, pathway?.label, steps, useExternal, setSharedContext]);
 
   useEffect(() => {
     setError(null);
@@ -370,10 +485,13 @@ function App() {
 
   return (
     <main>
+      <button className="themeToggle" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label="Toggle light and dark mode">
+        {theme === "dark" ? "Light mode" : "Dark mode"}
+      </button>
       <header className="hero">
         <div>
           <p className="eyebrow">Database-backed biology simulator</p>
-          <h1>BioScale Simulator</h1>
+          <h1>BioScale Platform</h1>
           <p className="subtitle">
             Search diseases, genes, and mutations like a research search engine. External databases provide biological evidence; the simulator converts selected evidence into simplified model assumptions and computed outputs.
           </p>
@@ -408,7 +526,7 @@ function App() {
           placeholder="e.g. TP53, BRCA1, KRAS"
           endpoint="/api/search/genes"
           value={gene}
-          onChange={(g) => { setGene(normalizeGeneSelection(g)); }}
+          onChange={(g) => { setGene(normalizeGeneSelection(g)); setProtein(null); }}
           initialQuery="TP53"
           allowFreeText
         />
@@ -432,6 +550,17 @@ function App() {
           extraParams={activeGene ? { gene: activeGene } : {}}
           value={pathway}
           onChange={(p) => { setPathway(p); }}
+          disabled={!gene}
+          allowFreeText
+        />
+        <AutocompleteSearch
+          key={`protein-${activeGene}`}
+          label="Protein (optional)"
+          placeholder="Search UniProt proteins"
+          endpoint="/api/search/proteins"
+          value={protein}
+          onChange={setProtein}
+          initialQuery={activeGene}
           disabled={!gene}
           allowFreeText
         />
@@ -483,6 +612,7 @@ function App() {
                   diseaseName={result.simulation_input.disease_name}
                   onSelect={() => {
                     setGene(normalizeGeneSelection({ id: c.symbol, label: c.symbol, meta: { symbol: c.symbol } }));
+                    setProtein(null);
                   }}
                 />
               ))}
@@ -556,6 +686,13 @@ function App() {
                   />
                 )}
                 <ProvenanceRow label="Structural impact" value={result.protein_effect.structural_impact_placeholder} provenance={result.protein_effect.provenance.structural_impact_placeholder} />
+                <ProteinStructurePanel
+                  apiBase={API_BASE}
+                  uniprotAccession={result.simulation_input.uniprot_accession || result.protein_effect.protein_id}
+                  position={result.mutation_result.position}
+                  proteinName={result.protein_effect.protein_name}
+                  mutation={result.mutation_result.mutation}
+                />
                 <ConciseSummary text={result.protein_effect.functional_impact_summary} />
                 <ScoreBar label="Remaining activity" value={result.protein_effect.activity} provenance={result.protein_effect.provenance.activity} />
                 <ScoreBar label="Remaining stability" value={result.protein_effect.stability} provenance={result.protein_effect.provenance.stability} />
@@ -564,7 +701,13 @@ function App() {
                 <RawEvidence data={result.protein_effect.raw_evidence} />
               </>
             ) : (
-              <ProteinEffectVisual protein={result.protein_effect} />
+              <ProteinStructurePanel
+                apiBase={API_BASE}
+                uniprotAccession={result.simulation_input.uniprot_accession || result.protein_effect.protein_id}
+                position={result.mutation_result.position}
+                proteinName={result.protein_effect.protein_name}
+                mutation={result.mutation_result.mutation}
+              />
             )}
           </LayerCard>
 
@@ -669,7 +812,15 @@ function App() {
                 <ProvenanceBadge category="computed_model" source="Ecosystem simulator" />
               </>
             ) : (
-              <EcosystemVisual ecosystem={result.ecosystem_result} diseaseName={result.simulation_input.disease_name} />
+              ecosystemHierarchy ? (
+                <CirclePackingChart
+                  data={ecosystemHierarchy}
+                  title={`${result.simulation_input.disease_name} ecosystem map`}
+                  description="Circle size follows the run-specific modeled contribution of each local ecosystem factor."
+                />
+              ) : (
+                <EcosystemVisual ecosystem={result.ecosystem_result} diseaseName={result.simulation_input.disease_name} />
+              )
             )}
           </LayerCard>
 
@@ -679,10 +830,13 @@ function App() {
             <p className="muted">{result.disclaimer}</p>
             <RawEvidence title="View full normalized evidence" data={result.evidence?.raw ?? {}} />
           </LayerCard>
+          {result.reasoning && <ReasoningPanel reasoning={result.reasoning} />}
+          <LearningPanel result={result} />
         </div>
       )}
       {activeTab === "evolution" && <EvolutionSimulator apiBase={API_BASE} result={result} disease={disease?.label ?? ""} gene={activeGene} mutation={canonicalMutationNotation(variant)} steps={steps} onResult={setEvolutionResult} />}
-      {activeTab === "intervention" && <InterventionSimulator apiBase={API_BASE} baseline={result} evolution={evolutionResult} />}
+      {activeTab === "digital-twin" && <PatientDigitalTwin apiBase={API_BASE} baseline={result} disease={disease?.label ?? ""} gene={activeGene} mutation={canonicalMutationNotation(variant)} protein={protein?.label ?? result?.protein_effect.protein_name ?? ""} pathway={pathway?.label ?? result?.pathway_result.label ?? ""} onResult={setPersonalizedResult} onInterventionScenario={(scenario) => { setInterventionScenario(scenario); setActiveTab("intervention"); }} />}
+      {activeTab === "intervention" && <InterventionSimulator apiBase={API_BASE} baseline={result} evolution={evolutionResult} scenario={interventionScenario} onResult={setInterventionResult} />}
       <p className="globalDisclaimer">Research prototype only, not a diagnostic tool or treatment recommendation.</p>
       <AskAIPanel open={aiOpen} onOpenChange={setAiOpen} result={result} />
     </main>
@@ -691,6 +845,6 @@ function App() {
 
 createRoot(document.getElementById("root")!).render(
   <AppErrorBoundary>
-    <App />
+    <SimulationProvider><App /></SimulationProvider>
   </AppErrorBoundary>,
 );

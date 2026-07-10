@@ -8,6 +8,7 @@ from app.adapters.open_targets import safe_fetch_disease_targets, safe_search_di
 from app.adapters.reactome import safe_fetch_pathway_evidence
 from app.adapters.summarizer import summarize_protein_function
 from app.adapters.uniprot import safe_fetch_protein_evidence
+from app.adapters.alphafold import get_structure_urls, safe_get_structure_status
 
 
 OPEN_TARGETS_SEARCH = {
@@ -179,3 +180,17 @@ def test_normalizer_infers_coding_variant_type():
     from app.adapters.normalizer import infer_variant_type_from_notation
 
     assert infer_variant_type_from_notation("c.5946delT") in {"coding deletion", "coding variant"}
+
+
+def test_alphafold_url_builder_is_deterministic():
+    urls = get_structure_urls("P04637")
+    assert urls["pdb_url"].endswith("AF-P04637-F1-model_v4.pdb")
+    assert urls["mmcif_url"].endswith("AF-P04637-F1-model_v4.cif")
+    assert urls["pae_url"].endswith("AF-P04637-F1-predicted_aligned_error_v4.json")
+
+
+@patch("app.adapters.alphafold.requests.get", side_effect=RuntimeError("offline"))
+def test_alphafold_status_fails_closed(mock_get):
+    status = safe_get_structure_status("CACHEMISS_TEST_ACCESSION", position=175)
+    assert status["alphafold_available"] is False
+    assert status["confidence_label"] == "unknown"

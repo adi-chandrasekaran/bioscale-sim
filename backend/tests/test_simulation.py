@@ -59,6 +59,27 @@ def test_search_variants_route_structure():
     assert response.json()["results"][0]["label"]
 
 
+def test_search_proteins_route_structure():
+    with patch("app.main.search_proteins_endpoint") as mock_search:
+        mock_search.return_value = {
+            "source": "UniProt", "available": True, "query": "TP53",
+            "results": [{"id": "P04637", "accession": "P04637", "name": "Cellular tumor antigen p53",
+                         "description": "TP53 · Homo sapiens", "source": "UniProt"}], "error": None,
+        }
+        response = client.get("/api/search/proteins", params={"q": "TP53"})
+    assert response.status_code == 200
+    assert response.json()["results"][0]["id"] == "P04637"
+
+
+def test_future_search_routes_return_structured_unavailable_state():
+    drug_response = client.get("/api/search/drugs", params={"q": "imatinib"})
+    phenotype_response = client.get("/api/search/phenotypes", params={"q": "seizure"})
+    assert drug_response.status_code == 200
+    assert phenotype_response.status_code == 200
+    assert drug_response.json()["available"] is False
+    assert phenotype_response.json()["available"] is False
+
+
 @patch("app.main.fetch_normalized_evidence")
 def test_evidence_endpoint_returns_normalized_bundle(mock_fetch):
     from app.models import NormalizedEvidence
@@ -217,3 +238,15 @@ def test_clinvar_parser_for_r175h():
     assert parsed is not None
     assert parsed["position"] == 175
     assert amino_acid_change_text("p.R175H") == "R→H at position 175"
+
+
+def test_alphafold_residue_plddt_parser_reads_pdb_bfactor():
+    from app.adapters.alphafold import _residue_plddt_from_pdb
+
+    pdb = (
+        "ATOM      1  N   ARG A 175      11.104  13.207   2.100  1.00 84.50           N\n"
+        "ATOM      2  CA  ARG A 175      12.204  14.107   2.500  1.00 85.50           C\n"
+        "ATOM      3  N   GLY A 176      13.104  15.207   2.900  1.00 40.00           N\n"
+    )
+
+    assert _residue_plddt_from_pdb(pdb, 175) == 85.0

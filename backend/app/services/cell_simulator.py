@@ -12,6 +12,16 @@ def _prov(category: str, source: str) -> ProvenanceEntry:
     return ProvenanceEntry(category=category, source=source)
 
 
+def _trait(label: str, score: float, confidence: float, provenance: str, explanation: str) -> dict:
+    return {
+        "label": label,
+        "score": round4(score),
+        "confidence": round4(confidence),
+        "provenance": provenance,
+        "explanation": explanation,
+    }
+
+
 def simulate_cell(pathway: PathwayResult) -> CellPhenotypeResult:
     nodes: Dict[str, float] = {node.id: node.activity for node in pathway.nodes}
     deltas: Dict[str, float] = {node.id: node.delta for node in pathway.nodes}
@@ -37,6 +47,12 @@ def simulate_cell(pathway: PathwayResult) -> CellPhenotypeResult:
         genomic_instability = clamp((1.0 - repair_capacity) * 0.55 + proliferation_rate * 0.30 + (1.0 - arrest) * 0.15)
         inflammatory_signal = clamp(stress_level * 0.55 + genomic_instability * 0.30 + (1.0 - apoptosis_rate) * 0.15)
         secretion_signal = clamp(inflammatory_signal * 0.6 + stress_level * 0.4)
+        pathway_disruption_score = clamp(sum(abs(value) for value in deltas.values()) / max(len(deltas), 1))
+        functional_loss_score = clamp(1.0 - nodes.get(pathway.selected_gene or "", 0.5))
+        stress_signal = stress_level
+        survival_signal = clamp((1.0 - apoptosis_rate) * 0.55 + proliferation_rate * 0.45)
+        proliferation_signal = proliferation_rate
+        repair_or_homeostasis_capacity = repair_capacity
 
         explanation = (
             f"Cell phenotype derived from p53-specific pathway nodes for {pathway.selected_gene}. "
@@ -73,6 +89,88 @@ def simulate_cell(pathway: PathwayResult) -> CellPhenotypeResult:
         )
         mapping_mode = "generic_pathway_traits"
 
+    survival_advantage = clamp(proliferation_rate * 0.42 + (1.0 - apoptosis_rate) * 0.33 + stress_level * 0.15 + (1.0 - repair_capacity) * 0.10)
+    vulnerability = clamp(apoptosis_rate * 0.35 + (1.0 - stress_level) * 0.20 + repair_capacity * 0.25 + (1.0 - proliferation_rate) * 0.20)
+    overall_cell_state_risk = clamp(
+        proliferation_rate * 0.22
+        + genomic_instability * 0.25
+        + (1.0 - apoptosis_rate) * 0.18
+        + (1.0 - repair_capacity) * 0.18
+        + inflammatory_signal * 0.17
+    )
+    confidence_base = clamp(
+        0.48
+        + (0.12 if pathway.external_evidence_available else 0.0)
+        + min(len(pathway.nodes), 8) * 0.025
+        + min(len(pathway.changed_nodes), 6) * 0.015
+    )
+    cell_context = "tumor-like growth pressure" if "cancer" in f"{pathway.label} {pathway.description}".lower() else "affected cell behavior"
+    trait_details = {
+        "proliferation": _trait(
+            "Proliferation",
+            proliferation_rate,
+            confidence_base,
+            "computed_model: Cell simulator",
+            f"Computed from pathway survival/proliferation output; higher values mean stronger {cell_context}.",
+        ),
+        "apoptosis": _trait(
+            "Apoptosis/death response",
+            apoptosis_rate,
+            confidence_base,
+            "computed_model: Cell simulator",
+            "Computed from death-response pathway activity and stress; higher values mean altered cells are more likely to be removed.",
+        ),
+        "repair_capacity": _trait(
+            "Repair/homeostasis capacity",
+            repair_capacity,
+            confidence_base,
+            "computed_model: Cell simulator",
+            "Computed from DNA repair or generic homeostasis pathway activity; lower values mean less ability to restore normal cell state.",
+        ),
+        "stress_response": _trait(
+            "Stress response",
+            stress_level,
+            confidence_base,
+            "computed_model: Cell simulator",
+            "Computed from damage, pathway disruption, and reduced repair; higher values mean the cell is modeled as more stressed.",
+        ),
+        "inflammation_signal": _trait(
+            "Inflammation signal",
+            inflammatory_signal,
+            confidence_base,
+            "computed_model: Cell simulator",
+            "Computed from stress and instability outputs; higher values mean stronger modeled inflammatory signaling.",
+        ),
+        "genomic_instability": _trait(
+            "Genomic instability",
+            genomic_instability,
+            confidence_base,
+            "computed_model: Cell simulator",
+            "Computed from low repair, altered checkpoint behavior, and proliferation pressure.",
+        ),
+        "survival_advantage": _trait(
+            "Survival advantage",
+            survival_advantage,
+            confidence_base,
+            "computed_model: Cell simulator",
+            "Computed from proliferation, low death response, stress tolerance, and reduced repair constraints.",
+        ),
+        "vulnerability": _trait(
+            "Vulnerability",
+            vulnerability,
+            confidence_base,
+            "computed_model: Cell simulator",
+            "Computed from death response, preserved repair, lower stress, and lower proliferation; higher values mean more targetable or fragile cell behavior.",
+        ),
+        "overall_cell_state_risk": _trait(
+            "Overall cell-state risk",
+            overall_cell_state_risk,
+            confidence_base,
+            "computed_model: Cell simulator",
+            "Integrated score combining proliferation, instability, survival, repair loss, and inflammatory signaling.",
+        ),
+    }
+
     return CellPhenotypeResult(
         proliferation_rate=round4(proliferation_rate),
         apoptosis_rate=round4(apoptosis_rate),
@@ -96,5 +194,8 @@ def simulate_cell(pathway: PathwayResult) -> CellPhenotypeResult:
             "proliferation_rate": _prov("computed_model", "Cell simulator"),
             "apoptosis_rate": _prov("computed_model", "Cell simulator"),
             "repair_capacity": _prov("computed_model", "Cell simulator"),
+            "genomic_instability": _prov("computed_model", "Cell simulator"),
+            "overall_cell_state_risk": _prov("computed_model", "Cell simulator"),
         },
+        trait_details=trait_details,
     )

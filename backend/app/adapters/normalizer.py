@@ -93,6 +93,24 @@ def get_uniprot_accession(gene_symbol: str, local_kb: Optional[Dict[str, Any]] =
     return GENE_UNIPROT_MAP.get(symbol)
 
 
+def uniprot_to_alphafold_id(uniprot_accession: str) -> str:
+    accession = (uniprot_accession or "").strip()
+    return f"AF-{accession}-F1" if accession else "unknown"
+
+
+def uniprot_to_alphafold_urls(uniprot_accession: str) -> Dict[str, str]:
+    accession = (uniprot_accession or "").strip()
+    if not accession:
+        return {"pdb_url": "", "mmcif_url": "", "pae_url": ""}
+    prefix = uniprot_to_alphafold_id(accession)
+    base = "https://alphafold.ebi.ac.uk/files"
+    return {
+        "pdb_url": f"{base}/{prefix}-model_v4.pdb",
+        "mmcif_url": f"{base}/{prefix}-model_v4.cif",
+        "pae_url": f"{base}/{prefix}-predicted_aligned_error_v4.json",
+    }
+
+
 def parse_hgvs_protein(notation: str) -> Optional[Dict[str, Any]]:
     text = notation.strip()
     match = HGVS_PROTEIN_RE.match(text)

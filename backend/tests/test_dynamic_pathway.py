@@ -134,6 +134,8 @@ def test_card5_changes_when_pathway_output_changes():
     assert "BRCA1" in pathway_brca.node_activities
     assert "TP53" not in pathway_brca.node_activities
     assert cell_tp53.mapping_mode != cell_brca.mapping_mode or cell_tp53.proliferation_rate != cell_brca.proliferation_rate
+    assert "overall_cell_state_risk" in cell_brca.trait_details
+    assert 0 <= cell_brca.trait_details["overall_cell_state_risk"]["confidence"] <= 1
 
 
 def test_card6_changes_when_cell_phenotype_changes():

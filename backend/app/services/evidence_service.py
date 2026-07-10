@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.adapters.clinvar import safe_fetch_variant_evidence
+from app.adapters.alphafold import safe_get_structure_status
 from app.adapters.open_targets import safe_fetch_disease_targets_by_id
 from app.adapters.reactome import safe_fetch_pathway_evidence
 from app.adapters.uniprot import safe_fetch_protein_evidence
@@ -120,6 +121,7 @@ def fetch_normalized_evidence(
     open_targets = safe_fetch_disease_targets_by_id(disease_id, limit=10)
     clinvar = safe_fetch_variant_evidence(symbol, mutation_notation)
     uniprot = safe_fetch_protein_evidence(symbol, local_kb, mutation_position=position)
+    alphafold = safe_get_structure_status(uniprot.get("accession") or "", position=position)
     reactome = safe_fetch_pathway_evidence(symbol, local_kb)
 
     assoc_score = 0.0
@@ -135,6 +137,8 @@ def fetch_normalized_evidence(
         sources.append("ClinVar")
     if uniprot.get("available"):
         sources.append("UniProt")
+    if alphafold.get("alphafold_available"):
+        sources.append("AlphaFold DB")
     if reactome.get("available"):
         sources.append("Reactome")
     if not sources:
@@ -170,6 +174,8 @@ def fetch_normalized_evidence(
             "variant_type": clinvar.get("variant_type") or (infer_variant_type_from_notation(mutation_notation) if mutation_notation else ("missense" if parsed else "unknown")),
             "amino_acid_change": clinvar.get("amino_acid_change") or amino_acid_change_text(mutation_notation),
             "clinvar_classification": clinvar.get("clinvar_classification"),
+            "clinvar_ids": clinvar.get("clinvar_ids", []),
+            "rsid": clinvar.get("rsid"),
             "phenotypes": clinvar.get("phenotypes", []),
             "clinvar_available": clinvar.get("available", False),
             "summary": summarize_variant_fallback(symbol, mutation_notation, clinvar.get("variant_type") or infer_variant_type_from_notation(mutation_notation)),
@@ -180,6 +186,9 @@ def fetch_normalized_evidence(
             "function_raw": uniprot.get("function_raw"),
             "function_summary": protein_summary or summarize_protein_fallback(uniprot.get("protein_name") or symbol, symbol),
             "domain_hit": uniprot.get("domain_hit"),
+            "alphafold": alphafold,
+            "alphafold_available": alphafold.get("alphafold_available", False),
+            "alphafold_confidence_label": alphafold.get("confidence_label"),
             "sequence_length": uniprot.get("sequence_length"),
             "domains": uniprot.get("domains", []),
             "summary": protein_summary or summarize_protein_fallback(uniprot.get("protein_name") or symbol, symbol),
@@ -205,6 +214,7 @@ def fetch_normalized_evidence(
         raw={
             "open_targets": open_targets,
             "clinvar": {k: v for k, v in clinvar.items() if k != "raw"},
+            "alphafold": alphafold,
             "uniprot": {k: v for k, v in uniprot.items() if k != "raw_entry"},
             "reactome": reactome,
         },
@@ -362,7 +372,10 @@ def _build_protein(protein: ProteinEffectResult, evidence: NormalizedEvidence, m
         "stability": _prov("simulator_assumption", "Simulator model"),
         "binding": _prov("simulator_assumption", "Simulator model"),
         "loss_of_function_score": _prov("computed_model", "Simulator model"),
-        "structural_impact_placeholder": _prov("simulator_assumption", "AlphaFold TODO"),
+        "structural_impact_placeholder": _prov(
+            "external_database" if protein_info.get("alphafold_available") else "missing_evidence",
+            "AlphaFold DB",
+        ),
     }
 
     return protein.model_copy(
@@ -373,13 +386,21 @@ def _build_protein(protein: ProteinEffectResult, evidence: NormalizedEvidence, m
             "mutation_location": f"Position {mutation.position}" if mutation.position else None,
             "domain_hit": protein_info.get("domain_hit") or (protein.affected_domains[0] if protein.affected_domains else mutation.domain),
             "functional_impact_summary": functional,
+            "structural_impact_placeholder": (
+                f"AlphaFold structure available; confidence near selected residue is {protein_info.get('alphafold_confidence_label') or 'unknown'}."
+                if protein_info.get("alphafold_available")
+                else "AlphaFold structure unavailable for the selected protein."
+            ),
             "summary": protein_info.get("function_summary") or protein_info.get("summary"),
             "explanation": limit_sentences(protein.explanation, 3),
             "source": "UniProt + Simulator" if uni.get("available") else "Local fallback + Simulator",
             "external_evidence_available": uni.get("available", False),
             "evidence_notice": None if uni.get("available") else evidence.evidence_notice,
             "provenance": provenance,
-            "raw_evidence": {"uniprot": {k: v for k, v in uni.items() if k not in {"raw_entry"}}},
+            "raw_evidence": {
+                "uniprot": {k: v for k, v in uni.items() if k not in {"raw_entry"}},
+                "alphafold": evidence.raw.get("alphafold", {}),
+            },
         }
     )
 

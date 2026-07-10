@@ -1,7 +1,41 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #12201d;
-  background: #f3f7f4;
+  --bg: #f3f7f4;
+  --panel-bg: #ffffff;
+  --panel-alt-bg: #edf7f1;
+  --text: #12201d;
+  --muted-text: #44534f;
+  --border: #d5e6da;
+  --accent: #237457;
+  --accent-soft: #b9dcc8;
+  --danger: #b63f3f;
+  --success: #237457;
+  --warning: #8a641d;
+  --badge-bg: #edf7f1;
+  --badge-text: #437764;
+  --graph-node: #dff3e9;
+  --graph-link: #59927d;
+  color: var(--text);
+  background: var(--bg);
+}
+
+:root[data-theme="dark"] {
+  --bg: #08110f;
+  --panel-bg: #0f1c19;
+  --panel-alt-bg: #162823;
+  --text: #edf7f1;
+  --muted-text: #b5c8c0;
+  --border: #284139;
+  --accent: #7fd3a8;
+  --accent-soft: #25483d;
+  --danger: #ff8f86;
+  --success: #7fd3a8;
+  --warning: #f0c36a;
+  --badge-bg: #162823;
+  --badge-text: #c8ead8;
+  --graph-node: #25483d;
+  --graph-link: #7fd3a8;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -9,6 +43,8 @@
 body {
   margin: 0;
   min-height: 100vh;
+  color: var(--text);
+  background: var(--bg);
 }
 
 main {
@@ -17,13 +53,26 @@ main {
   padding: 32px 0 64px;
 }
 
+.themeToggle {
+  position: fixed;
+  right: 22px;
+  top: 18px;
+  z-index: 20;
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-bg);
+  color: var(--text);
+  box-shadow: 0 12px 30px rgba(18, 32, 29, 0.12);
+}
+
 .hero {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
   gap: 24px;
   align-items: stretch;
-  background: linear-gradient(135deg, #ffffff, #e8f5ee);
-  border: 1px solid #d5e6da;
+  background: linear-gradient(135deg, var(--panel-bg), var(--panel-alt-bg));
+  border: 1px solid var(--border);
   border-radius: 28px;
   padding: 34px;
   box-shadow: 0 24px 70px rgba(18, 32, 29, 0.08);
@@ -33,7 +82,7 @@ main {
   margin: 0 0 10px;
   text-transform: uppercase;
   letter-spacing: 0.18em;
-  color: #437764;
+  color: var(--badge-text);
   font-weight: 800;
   font-size: 12px;
 }
@@ -48,7 +97,7 @@ h1 {
 .subtitle {
   font-size: 18px;
   line-height: 1.6;
-  color: #44534f;
+  color: var(--muted-text);
   max-width: 760px;
 }
 
@@ -65,9 +114,9 @@ h1 {
   min-height: 38px;
   padding: 9px 14px;
   border-radius: 999px;
-  border: 1px solid #b9dcc8;
-  background: #ffffff;
-  color: #12201d;
+  border: 1px solid var(--accent-soft);
+  background: var(--panel-bg);
+  color: var(--text);
   font-size: 13px;
   font-weight: 900;
   text-decoration: none;
@@ -96,8 +145,8 @@ h1 {
   grid-template-columns: 1fr;
   gap: 7px;
   align-content: center;
-  background: rgba(255,255,255,0.65);
-  border: 1px solid #d5e6da;
+  background: color-mix(in srgb, var(--panel-bg) 75%, transparent);
+  border: 1px solid var(--border);
   border-radius: 22px;
   padding: 18px;
 }
@@ -107,13 +156,13 @@ h1 {
   top: 12px;
   z-index: 4;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   margin: 22px 0 0;
   padding: 6px;
-  border: 1px solid #cfe1d5;
+  border: 1px solid var(--border);
   border-radius: 18px;
-  background: rgba(237, 247, 241, 0.94);
+  background: color-mix(in srgb, var(--panel-alt-bg) 94%, transparent);
   box-shadow: 0 12px 30px rgba(18, 32, 29, 0.09);
   backdrop-filter: blur(14px);
 }
@@ -123,19 +172,19 @@ h1 {
   padding: 10px 14px;
   border-radius: 13px;
   background: transparent;
-  color: #437764;
+  color: var(--badge-text);
   box-shadow: none;
 }
 
 .simulatorTabs button.active {
-  background: #12201d;
-  color: #ffffff;
+  background: var(--text);
+  color: var(--bg);
   box-shadow: 0 10px 22px rgba(18, 32, 29, 0.18);
 }
 
 .pipeStep {
-  background: #12201d;
-  color: #ffffff;
+  background: var(--text);
+  color: var(--bg);
   padding: 10px 14px;
   border-radius: 999px;
   font-weight: 800;
@@ -145,7 +194,7 @@ h1 {
 
 .pipeArrow {
   text-align: center;
-  color: #59927d;
+  color: var(--graph-link);
   font-weight: 900;
 }
 
@@ -163,8 +212,8 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   align-items: end;
-  background: #ffffff;
-  border: 1px solid #dce9df;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
   border-radius: 22px;
   padding: 18px;
   box-shadow: 0 16px 40px rgba(18, 32, 29, 0.05);
@@ -355,6 +404,63 @@ h1 {
   font-style: normal;
 }
 
+.sourceStatusGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.sourceStatus {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.sourceStatus.unavailable {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 13%, var(--panel-bg));
+}
+
+.meaningGrid,
+.learningGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.meaningGrid > div,
+.learningGrid > div {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt-bg);
+}
+
+.meaningGrid strong,
+.learningGrid span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.meaningGrid p,
+.learningGrid p,
+.learningGrid ul {
+  margin: 0;
+  color: var(--muted-text);
+  line-height: 1.5;
+}
+
 .computedFromBlock {
   margin: 8px 0 12px;
   padding: 10px 12px;
@@ -526,15 +632,39 @@ button:disabled { opacity: 0.55; cursor: wait; }
 
 .cloneGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .cloneCard { padding: 16px; border-radius: 18px; border: 1px solid #dce9df; background: linear-gradient(145deg, #ffffff, #edf7f1); }
+.cloneCard.selectedCloneCard { border-color: #237457; box-shadow: 0 0 0 3px rgba(35, 116, 87, 0.14), 0 14px 34px rgba(18, 32, 29, 0.08); }
 .cloneCard p { margin: 10px 0 0; color: #44534f; font-size: 13px; line-height: 1.5; }
 .cloneBadge { display: inline-flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 999px; background: #12201d; color: #fff; font-size: 11px; }
 .miniMetricGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 .metricGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .metricCard { display: grid; align-content: start; gap: 7px; padding: 13px; border-radius: 15px; border: 1px solid #dce9df; background: #f7fbf8; min-width: 0; }
-.metricCard > span { color: #57766b; font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
+.metricCard > span,
+.metricCardLabel { color: #57766b; font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
+.metricCardLabel { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .metricCard > strong { color: #12201d; font-size: 19px; overflow-wrap: anywhere; }
 .metricCard > small { color: #64746f; line-height: 1.4; }
 .metricCard .barOuter { margin-top: 3px; }
+.metricCard .barInner.increased { background: linear-gradient(90deg, #9bcfb6, #237457); }
+.metricCard .barInner.decreased { background: linear-gradient(90deg, #efb1a9, #b63f3f); }
+.cloneReasoning { margin-top: 14px; padding: 13px; border-radius: 15px; border: 1px solid #cfe1d5; background: rgba(255, 255, 255, 0.76); }
+.cloneReasoning strong { color: #12201d; }
+.cloneReasoning p { margin-top: 7px; font-size: 12px; }
+.timelineToggleList { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.timelineToggle { border: 1px solid #b9dcc8; background: #edf7f1; color: #355348; border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 900; cursor: pointer; }
+.timelineToggle span { color: #12201d; margin-left: 5px; }
+.timelineToggle.off { opacity: 0.45; text-decoration: line-through; }
+.evolutionEvents { display: grid; gap: 10px; margin: 0; padding-left: 22px; }
+.evolutionEvents li { padding: 12px; border: 1px solid #dce9df; border-radius: 14px; background: #f7fbf8; }
+.evolutionEvents span { color: #57766b; font-size: 11px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
+.evolutionEvents strong { display: block; margin-top: 3px; color: #12201d; }
+.evolutionEvents p { margin: 5px 0 0; color: #44534f; line-height: 1.5; }
+.evidenceAssumptionGrid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 14px; }
+.evidenceAssumptionGrid > div { padding: 14px; border: 1px solid #dce9df; border-radius: 16px; background: #f7fbf8; }
+.evidenceAssumptionGrid h3 { margin: 0 0 8px; }
+.evidenceAssumptionGrid p, .evidenceAssumptionGrid li { color: #44534f; line-height: 1.55; }
+.simulatorPanelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.simulatorPanelHeader h2 { margin: 0; }
+.simulatorPanelHeader .panelEyebrow { margin-bottom: 8px; }
 
 .panelExplanation, .reportText { margin: 16px 0 0; color: #44534f; line-height: 1.65; }
 .researchDisclaimer, .globalDisclaimer { color: #6a5520; background: #fff8e8; border: 1px solid #ead9a8; border-radius: 12px; padding: 10px 12px; font-size: 12px; font-weight: 700; }
@@ -562,6 +692,125 @@ button:disabled { opacity: 0.55; cursor: wait; }
 .interventionControls label > span { color: #57766b; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
 .cloneResponse { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .cloneResponse > * { padding: 7px 10px; border-radius: 999px; background: #edf7f1; color: #355348; font-size: 12px; }
+
+.interventionResearch .simulatorPanel { overflow: visible; }
+.drugSearchPanel { display: grid; gap: 12px; margin-bottom: 18px; }
+.drugSearchPanel label { display: grid; gap: 8px; color: #57766b; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+.drugSearchPanel label > span,
+.advancedIntervention label > span { display: inline-flex; align-items: center; gap: 6px; }
+.drugSearchRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+.drugSearchRow button { border-radius: 13px; border: 0; padding: 0 16px; background: #12201d; color: #fff; font-weight: 900; cursor: pointer; }
+.drugSearchRow button:disabled { opacity: 0.6; cursor: wait; }
+.drugResultList { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.drugResultCard { display: grid; gap: 6px; text-align: left; padding: 13px; border: 1px solid #dce9df; border-radius: 15px; background: #f7fbf8; color: #2c3b37; cursor: pointer; }
+.drugResultCard.selected { border-color: #237457; box-shadow: 0 0 0 3px rgba(35, 116, 87, 0.12); background: #edf7f1; }
+.drugResultCard strong { color: #12201d; font-size: 15px; }
+.drugResultCard span,
+.drugResultCard small { color: #57766b; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
+.drugResultCard p { margin: 0; color: #44534f; font-size: 12px; line-height: 1.45; }
+.advancedIntervention { margin-top: 16px; border: 1px solid #dce9df; border-radius: 18px; background: #f7fbf8; }
+.advancedIntervention summary { padding: 13px 15px; cursor: pointer; color: #355348; font-weight: 900; }
+.advancedInterventionGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 0 15px 15px; }
+.advancedInterventionGrid label { display: grid; gap: 8px; color: #57766b; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
+.beforeAfterMetricGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 13px; }
+.metricChangeCard { display: grid; gap: 12px; padding: 15px; border-radius: 18px; border: 1px solid #dce9df; background: #f7fbf8; }
+.metricChangeCard.increased { border-color: #9bcfb6; }
+.metricChangeCard.decreased { border-color: #efb1a9; }
+.metricChangeHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.metricChangeHeader strong { display: inline-flex; align-items: center; gap: 6px; color: #12201d; }
+.metricChangeHeader span { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; background: #edf7f1; color: #237457; font-size: 11px; font-weight: 900; }
+.metricChangeCard.decreased .metricChangeHeader span { background: #fff0ef; color: #b63f3f; }
+.metricChangeBars { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 7px 10px; }
+.metricChangeBars span { color: #64746f; font-size: 11px; font-weight: 900; }
+.metricChangeBars b { color: #12201d; }
+.metricChangeCard p { margin: 0; color: #44534f; line-height: 1.5; }
+.metricChangeCard small { color: #64746f; font-weight: 800; }
+.neutralBar { background: linear-gradient(90deg, #cad7d0, #64746f); }
+.interventionVisualGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.interventionVisualGrid > div { min-width: 0; }
+.interventionVisualGrid h3 { margin: 0 0 12px; }
+.evidenceSummaryGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.evidenceSummaryGrid > div,
+.wideEvidence { padding: 12px; border: 1px solid #dce9df; border-radius: 14px; background: #f7fbf8; }
+.evidenceSummaryGrid span { display: block; margin-bottom: 4px; color: #57766b; font-size: 10px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.evidenceSummaryGrid strong { color: #12201d; overflow-wrap: anywhere; }
+.wideEvidence { grid-column: 1 / -1; margin: 0; color: #44534f; line-height: 1.55; }
+.bodyComparisonPanel { display: grid; gap: 12px; margin-bottom: 14px; padding: 14px; border: 1px solid #dce9df; border-radius: 18px; background: #f7fbf8; }
+.bodyComparisonControls { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bodyComparisonControls div { display: grid; gap: 3px; }
+.bodyComparisonControls strong { color: #12201d; text-transform: capitalize; }
+.bodyComparisonControls span { color: #64746f; font-size: 12px; font-weight: 800; }
+.bodyComparisonControls button { border: 1px solid #b9dcc8; border-radius: 999px; padding: 8px 12px; background: #edf7f1; color: #355348; font-weight: 900; cursor: pointer; }
+.bodyComparisonSvg { width: 100%; min-height: 300px; display: block; border-radius: 16px; background: linear-gradient(145deg, #fff, #edf7f1); border: 1px solid #dce9df; }
+.bodyComparisonOutline { fill: rgba(155, 207, 182, 0.12); stroke: #8fbba4; stroke-width: 3; }
+.bodyComparisonLimb { fill: none; stroke: #8fbba4; stroke-width: 12; stroke-linecap: round; }
+.bodyTextTitle,
+.bodySiteLabel,
+.bodySiteValue { fill: #12201d; font-weight: 900; }
+.bodySiteLabel { font-size: 12px; text-transform: capitalize; }
+.bodySiteValue { font-size: 15px; }
+.bodyCallout { display: grid; gap: 4px; padding: 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.92); border: 1px solid #dce9df; color: #12201d; font: 12px sans-serif; box-shadow: 0 10px 24px rgba(18, 32, 29, 0.08); }
+.bodyCallout span { color: #57766b; font-weight: 800; }
+.bodyComparisonPanel p { margin: 0; color: #44534f; line-height: 1.55; }
+.studentTermGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; padding-top: 10px; }
+.studentTermGrid div { display: grid; gap: 5px; padding: 12px; border-radius: 12px; background: #f7fbf8; border: 1px solid #dce9df; }
+.studentTermGrid strong { text-transform: capitalize; }
+.studentTermGrid span,
+.validationList li { color: #44534f; line-height: 1.5; }
+.validationList { margin: 10px 0 0; }
+
+.reasoningChain { display: grid; gap: 12px; }
+.reasoningStep { padding: 16px; border: 1px solid #dce9df; border-radius: 18px; background: linear-gradient(145deg, #fff, #f4f8f5); }
+.reasoningStepHeader { display: flex; align-items: center; gap: 10px; }
+.reasoningStepHeader > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; background: #237457; font-weight: 900; }
+.reasoningStepHeader h3 { margin: 0; flex: 1; }
+.reasoningStepHeader b { color: #437764; font-size: 12px; }
+.reasoningStep dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 10px; }
+.reasoningStep dl > div { padding: 10px; border-radius: 12px; background: #fff; border: 1px solid #e2ece5; }
+.reasoningStep dt { color: #57766b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+.reasoningStep dd { margin: 5px 0 0; color: #2c3b37; font-size: 13px; line-height: 1.5; }
+.reasoningStep small, .modelProvenance { color: #64746f; }
+.causalGraph { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; padding: 16px; overflow-x: auto; border-radius: 18px; background: #edf7f1; }
+.causalGraphItem { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.causalGraphItem > div { display: grid; gap: 3px; min-width: 100px; padding: 10px; border-radius: 12px; background: #12201d; color: white; text-align: center; }
+.causalGraphItem span { font-size: 10px; color: #b9dcc8; }
+.causalGraphItem .causalArrow { color: #237457; font-size: 24px; font-weight: 900; }
+
+.profileGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.profileGrid label { display: grid; align-content: start; gap: 7px; }
+.profileGrid .wideField { grid-column: 1 / -1; }
+.profileGrid textarea { min-height: 92px; resize: vertical; }
+.modeSelector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; padding: 7px; border: 1px solid #dce9df; border-radius: 18px; background: #edf7f1; }
+.modeSelector button { border: 0; border-radius: 13px; padding: 12px 14px; background: transparent; color: #437764; font-weight: 900; cursor: pointer; }
+.modeSelector button.active { background: #12201d; color: #fff; box-shadow: 0 12px 28px rgba(18, 32, 29, 0.14); }
+.knownPanelGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.knownPanelGrid article { padding: 14px; border: 1px solid #dce9df; border-radius: 16px; background: #f7fbf8; }
+.knownPanelGrid h3 { margin: 0 0 8px; font-size: 15px; }
+.knownPanelGrid p { margin: 0; color: #44534f; line-height: 1.55; }
+.twinTableWrap { overflow-x: auto; border: 1px solid #dce9df; border-radius: 18px; background: #fff; }
+.twinRiskTable { width: 100%; min-width: 1380px; border-collapse: collapse; }
+.twinRiskTable th,
+.twinRiskTable td { padding: 11px 12px; border-bottom: 1px solid #dce9df; text-align: left; vertical-align: top; color: #2c3b37; font-size: 12px; line-height: 1.45; }
+.twinRiskTable th { position: sticky; top: 0; z-index: 1; background: #edf7f1; color: #57766b; font-size: 10px; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; }
+.twinRiskTable td strong { color: #12201d; }
+.scenarioButtonWrap { position: relative; display: inline-flex; }
+.scenarioAddButton { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 1px solid #b9dcc8; background: #237457; color: #fff; font-size: 20px; font-weight: 900; cursor: pointer; }
+.scenarioPopover { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 12; display: none; min-width: 250px; padding: 12px; border-radius: 14px; background: #0d211c; color: #f4fbf7; box-shadow: 0 18px 50px rgba(6, 25, 20, 0.22); }
+.scenarioButtonWrap:hover .scenarioPopover,
+.scenarioButtonWrap:focus-within .scenarioPopover { display: grid; gap: 7px; }
+.scenarioPopover strong { color: #fff; }
+.scenarioPopover span { display: inline-flex; padding: 5px 8px; border-radius: 999px; background: rgba(255,255,255,0.08); color: #e8f5ef; font-size: 11px; font-weight: 800; }
+.scenarioPopover em { color: #b9dcc8; font-style: normal; font-size: 11px; line-height: 1.4; }
+.successNotice { margin-top: 12px; padding: 11px 13px; border-radius: 12px; border: 1px solid #b9dcc8; background: #edf7f1; color: #237457; font-weight: 900; }
+.futureUpload { padding: 11px 13px; border-radius: 12px; background: #f4f8f5; border: 1px dashed #b9dcc8; color: #57766b; font-size: 12px; }
+.twinSplit { display: grid; grid-template-columns: 1.4fr .6fr; gap: 16px; align-items: start; }
+.twinSplit h3 { margin: 0 0 8px; }
+.twinSplit p { color: #44534f; line-height: 1.6; }
+.systemTags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.systemTags span { padding: 7px 10px; border-radius: 999px; background: #edf7f1; border: 1px solid #b9dcc8; color: #355348; font-size: 12px; font-weight: 800; }
+.twinReasoning { display: grid; gap: 8px; margin: 0; padding-left: 24px; color: #2c3b37; line-height: 1.55; }
+.evidenceList { display: grid; gap: 8px; margin-top: 16px; }
+.evidenceList > div { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 12px; background: #f7fbf8; border: 1px solid #dce9df; font-size: 12px; color: #57766b; }
 
 h2 {
   margin: 0 0 14px;
@@ -1836,8 +2085,335 @@ p { color: #2c3b37; line-height: 1.58; }
 .chartLine { stroke: #237457; stroke-width: 4; }
 .axisLabel { font-size: 13px; font-weight: 800; fill: #57766b; }
 
+.d3ChartWrap,
+.structurePanel {
+  position: relative;
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel-alt-bg);
+  overflow: hidden;
+}
+
+.d3ChartHeader,
+.structurePanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.d3ChartHeader h3,
+.structurePanelHeader h3 {
+  margin: 2px 0 4px;
+  color: var(--text);
+}
+
+.d3Svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 28%),
+    color-mix(in srgb, var(--panel-bg) 82%, var(--panel-alt-bg));
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.d3Tooltip {
+  position: absolute;
+  z-index: 10;
+  max-width: min(320px, calc(100% - 32px));
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #0d211c;
+  color: #f4fbf7;
+  box-shadow: 0 18px 50px rgba(6, 25, 20, 0.22);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.d3Tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.d3Tooltip strong,
+.d3Tooltip span {
+  color: inherit;
+}
+
+.structureMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.structureMetricGrid > div {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-bg);
+}
+
+.structureMetricGrid span {
+  display: block;
+  color: var(--badge-text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.structureMetricGrid strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.structureLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.structureLinks a {
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background: var(--panel-bg);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.compactError {
+  margin: 10px 0;
+  padding: 10px 12px;
+}
+
+.proteinStructureGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.proteinStructureGrid section {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel-bg);
+}
+
+.proteinStructureGrid h4 {
+  margin: 0 0 6px;
+  color: var(--text);
+}
+
+.proteinModelViewer {
+  min-height: 340px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.proteinModelPane .muted {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.phenotypeModelPanel {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) 1.15fr;
+  gap: 18px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel-alt-bg);
+}
+
+.phenotypeRadarSvg {
+  width: 100%;
+  max-width: 430px;
+  min-height: 300px;
+}
+
+.radarRing,
+.radarAxis {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 28%, transparent);
+  stroke-width: 1.5;
+}
+
+.radarPolygon {
+  fill: color-mix(in srgb, var(--accent) 28%, transparent);
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.radarPoint {
+  fill: var(--accent-strong);
+  stroke: var(--panel-bg);
+  stroke-width: 2;
+}
+
+.radarLabel {
+  fill: var(--badge-text);
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.phenotypeTraitGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.phenotypeTraitTile {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-bg);
+}
+
+.phenotypeTraitTile span,
+.phenotypeTraitTile small {
+  color: var(--badge-text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.phenotypeTraitTile strong {
+  display: block;
+  margin: 5px 0 8px;
+  color: var(--text);
+  font-size: 24px;
+}
+
+.phenotypeTraitTile p {
+  margin: 8px 0;
+  color: var(--muted-text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.advancedInputsPanel {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-bg);
+}
+
+.advancedInputsPanel summary {
+  cursor: pointer;
+  color: var(--badge-text);
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.advancedInputsPanel > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+.advancedInputsPanel strong {
+  color: var(--text);
+}
+
+.bodyModelPanel {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel-alt-bg);
+}
+
+.bodyModelControls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.bodyModelControls > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bodyModelControls button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.bodyModelViewport {
+  display: grid;
+  place-items: center;
+  min-height: 460px;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 36%), var(--panel-bg);
+  overflow: hidden;
+}
+
+.bodyModelSvg {
+  width: min(100%, 430px);
+  transition: transform 180ms ease;
+  transform-origin: center;
+}
+
+.bodyLimb {
+  fill: none;
+  stroke: #9fcbb8;
+  stroke-width: 18;
+  stroke-linecap: round;
+}
+
+.bodyModelLabel {
+  fill: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.bodyAffectedPin text {
+  fill: var(--badge-text);
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 @media (max-width: 900px) {
-  .hero, .grid, .controlPanel, .searchPanel, .twoCols, .proteinVisualGrid, .populationVisualGrid, .ecosystemVisualGrid, .cellVisualLayout, .ecosystemSidePanel { grid-template-columns: 1fr; }
+  .hero, .grid, .controlPanel, .searchPanel, .twoCols, .proteinVisualGrid, .populationVisualGrid, .ecosystemVisualGrid, .cellVisualLayout, .ecosystemSidePanel, .advancedInterventionGrid, .interventionVisualGrid, .evidenceSummaryGrid { grid-template-columns: 1fr; }
+  .structureMetricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .proteinStructureGrid,
+  .phenotypeModelPanel,
+  .phenotypeTraitGrid {
+    grid-template-columns: 1fr;
+  }
   .card.wide { grid-column: auto; }
   .visualPanelHeader,
   .populationSnapshot {
@@ -1854,10 +2430,20 @@ p { color: #2c3b37; line-height: 1.58; }
 
 @media (max-width: 700px) {
   .simulatorTabs { position: static; grid-template-columns: 1fr; }
-  .contextStrip, .sliderGrid, .interventionControls, .cloneGrid { grid-template-columns: 1fr; }
+  .contextStrip, .sliderGrid, .interventionControls, .cloneGrid, .profileGrid, .reasoningStep dl, .twinSplit, .drugSearchRow, .metricChangeBars { grid-template-columns: 1fr; }
   .treeChildren { width: 100%; gap: 12px; }
   .treeParent, .treeChildren > div { min-width: 0; width: 100%; }
   .miniMetricGrid { grid-template-columns: 1fr; }
+  .d3ChartHeader,
+  .structurePanelHeader,
+  .structureLinks {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .structureMetricGrid { grid-template-columns: 1fr; }
+  .bodyModelControls {
+    flex-direction: column;
+  }
 }
 
 /* Make all main simulator cards the same width */
@@ -1898,4 +2484,234 @@ main,
   flex-direction: column !important;
   align-items: stretch !important;
   gap: 24px;
+}
+
+:root[data-theme="dark"] {
+  background: var(--bg);
+}
+
+:root[data-theme="dark"] h1,
+:root[data-theme="dark"] h2,
+:root[data-theme="dark"] h3,
+:root[data-theme="dark"] strong,
+:root[data-theme="dark"] .candidateMain strong,
+:root[data-theme="dark"] .metricCard > strong {
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .simulationInputPanel,
+:root[data-theme="dark"] .searchPanel,
+:root[data-theme="dark"] .metricCard,
+:root[data-theme="dark"] .cloneCard,
+:root[data-theme="dark"] .cloneReasoning,
+:root[data-theme="dark"] .evolutionEvents li,
+:root[data-theme="dark"] .evidenceAssumptionGrid > div,
+:root[data-theme="dark"] .knownPanelGrid article,
+:root[data-theme="dark"] .twinTableWrap,
+:root[data-theme="dark"] .rawEvidence,
+:root[data-theme="dark"] .computedFromBlock,
+:root[data-theme="dark"] .baselineMissing,
+:root[data-theme="dark"] .miniChartWrap,
+:root[data-theme="dark"] .pathwaySvg,
+:root[data-theme="dark"] .chartSvg,
+:root[data-theme="dark"] .autocompleteList,
+:root[data-theme="dark"] .panelHelpBody {
+  background: var(--panel-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .d3ChartWrap,
+:root[data-theme="dark"] .structurePanel,
+:root[data-theme="dark"] .structureMetricGrid > div,
+:root[data-theme="dark"] .structureLinks a {
+  background: var(--panel-alt-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .evidenceModelBanner,
+:root[data-theme="dark"] .emptyState,
+:root[data-theme="dark"] .candidate,
+:root[data-theme="dark"] .candidate.clickable.selected,
+:root[data-theme="dark"] .selected,
+:root[data-theme="dark"] .contextStrip span,
+:root[data-theme="dark"] .rawEvidence summary,
+:root[data-theme="dark"] .panelHelpAccordion summary,
+:root[data-theme="dark"] .helpIcon,
+:root[data-theme="dark"] .cardTabs,
+:root[data-theme="dark"] .futureUpload,
+:root[data-theme="dark"] .evidenceList > div,
+:root[data-theme="dark"] .reasoningStep,
+:root[data-theme="dark"] .modelNote,
+:root[data-theme="dark"] .drugResultCard,
+:root[data-theme="dark"] .advancedIntervention,
+:root[data-theme="dark"] .metricChangeCard,
+:root[data-theme="dark"] .evidenceSummaryGrid > div,
+:root[data-theme="dark"] .wideEvidence,
+:root[data-theme="dark"] .bodyComparisonPanel,
+:root[data-theme="dark"] .studentTermGrid div {
+  background: var(--panel-alt-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .modeSelector,
+:root[data-theme="dark"] .successNotice {
+  background: var(--panel-alt-bg);
+  border-color: var(--border);
+}
+
+:root[data-theme="dark"] .modeSelector button {
+  color: var(--badge-text);
+}
+
+:root[data-theme="dark"] .modeSelector button.active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+:root[data-theme="dark"] .twinRiskTable th {
+  background: var(--panel-alt-bg);
+  color: var(--badge-text);
+}
+
+:root[data-theme="dark"] .twinRiskTable td,
+:root[data-theme="dark"] .twinRiskTable th {
+  border-color: var(--border);
+}
+
+:root[data-theme="dark"] .twinRiskTable td,
+:root[data-theme="dark"] .knownPanelGrid p {
+  color: var(--muted-text);
+}
+
+:root[data-theme="dark"] .timelineToggle {
+  background: var(--panel-alt-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .timelineToggle span,
+:root[data-theme="dark"] .evolutionEvents strong {
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .subtitle,
+:root[data-theme="dark"] .conciseSummary,
+:root[data-theme="dark"] .candidateSummary,
+:root[data-theme="dark"] .panelExplanation,
+:root[data-theme="dark"] .reportText,
+:root[data-theme="dark"] .muted,
+:root[data-theme="dark"] .computedFromLine,
+:root[data-theme="dark"] .simInputGrid em,
+:root[data-theme="dark"] .optionSubtitle,
+:root[data-theme="dark"] .searchStatus,
+:root[data-theme="dark"] .metricCard > small,
+:root[data-theme="dark"] .panelHelpList,
+:root[data-theme="dark"] .cardFooter,
+:root[data-theme="dark"] .evolutionEvents p,
+:root[data-theme="dark"] .evidenceAssumptionGrid p,
+:root[data-theme="dark"] .evidenceAssumptionGrid li,
+:root[data-theme="dark"] .drugResultCard p,
+:root[data-theme="dark"] .metricChangeCard p,
+:root[data-theme="dark"] .bodyComparisonPanel p,
+:root[data-theme="dark"] .studentTermGrid span,
+:root[data-theme="dark"] .validationList li {
+  color: var(--muted-text);
+}
+
+:root[data-theme="dark"] label,
+:root[data-theme="dark"] .simInputGrid span,
+:root[data-theme="dark"] .optionSource,
+:root[data-theme="dark"] .metricCardLabel,
+:root[data-theme="dark"] .metricCard > span,
+:root[data-theme="dark"] .eyebrow,
+:root[data-theme="dark"] .advancedIntervention label,
+:root[data-theme="dark"] .advancedInterventionGrid label,
+:root[data-theme="dark"] .drugSearchPanel label,
+:root[data-theme="dark"] .drugResultCard span,
+:root[data-theme="dark"] .drugResultCard small,
+:root[data-theme="dark"] .evidenceSummaryGrid span,
+:root[data-theme="dark"] .metricChangeBars span,
+:root[data-theme="dark"] .bodyComparisonControls span {
+  color: var(--badge-text);
+}
+
+:root[data-theme="dark"] .bodyComparisonSvg,
+:root[data-theme="dark"] .bodyCallout {
+  background: var(--panel-bg);
+  border-color: var(--border);
+}
+
+:root[data-theme="dark"] .bodyTextTitle,
+:root[data-theme="dark"] .bodySiteLabel,
+:root[data-theme="dark"] .bodySiteValue,
+:root[data-theme="dark"] .bodyCallout,
+:root[data-theme="dark"] .bodyCallout strong,
+:root[data-theme="dark"] .metricChangeBars b {
+  color: var(--text);
+  fill: var(--text);
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] .autocompleteList button {
+  background: #0b1714;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .autocompleteList button:hover {
+  background: var(--panel-alt-bg);
+}
+
+:root[data-theme="dark"] .autocompleteList button strong,
+:root[data-theme="dark"] .autocompleteList button span {
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .nodeCircle {
+  fill: var(--graph-node);
+  stroke: var(--accent);
+}
+
+:root[data-theme="dark"] .nodeLabel,
+:root[data-theme="dark"] .nodeValue {
+  fill: var(--text);
+}
+
+:root[data-theme="dark"] .activate,
+:root[data-theme="dark"] .chartLine {
+  stroke: var(--success);
+}
+
+:root[data-theme="dark"] .inhibit {
+  stroke: var(--danger);
+}
+
+:root[data-theme="dark"] .axis {
+  stroke: var(--border);
+}
+
+:root[data-theme="dark"] .axisLabel {
+  fill: var(--muted-text);
+}
+
+:root[data-theme="dark"] .barOuter {
+  background: #1c302a;
+}
+
+:root[data-theme="dark"] .barInner {
+  background: linear-gradient(90deg, #2e7c61, var(--accent));
+}
+
+:root[data-theme="dark"] .researchDisclaimer,
+:root[data-theme="dark"] .globalDisclaimer,
+:root[data-theme="dark"] .evidenceNotice {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 13%, var(--panel-bg));
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
 }

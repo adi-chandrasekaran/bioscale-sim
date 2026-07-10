@@ -34,4 +34,41 @@ def simulate_ecosystem(cell: CellPhenotypeResult, population: PopulationResult, 
         computed_from_gene=cell.computed_from_gene,
         computed_from_pathway=cell.computed_from_pathway,
         computed_from_protein_activity=cell.computed_from_protein_activity,
+        ecosystem_hierarchy={
+            "name": f"{req.disease_name or req.disease_id} tissue ecosystem",
+            "type": "ecosystem",
+            "description": "Run-specific tissue environment combining mutated cells, immune activity, inflammation, and nutrient availability.",
+            "children": [
+                {
+                    "name": "Mutated cell burden",
+                    "type": "population",
+                    "value": max(round4(tumor_like_burden), 0.04),
+                    "description": f"{round4(tumor_like_burden) * 100:.1f}% modeled tumor-like burden from the population layer.",
+                },
+                {
+                    "name": "Immune containment",
+                    "type": "immune",
+                    "value": max(round4(immune_clearance), 0.04),
+                    "description": f"{round4(immune_clearance) * 100:.1f}% modeled immune clearance capacity remains.",
+                },
+                {
+                    "name": "Inflammatory zone",
+                    "type": "inflammation",
+                    "value": max(round4(inflammation), 0.04),
+                    "description": f"{round4(inflammation) * 100:.1f}% modeled inflammatory signaling in the local environment.",
+                },
+                {
+                    "name": "Nutrient stress",
+                    "type": "nutrient",
+                    "value": max(round4(nutrient_stress), 0.04),
+                    "description": f"{round4(nutrient_stress) * 100:.1f}% modeled nutrient stress around the affected cells.",
+                },
+                {
+                    "name": "Genomic instability",
+                    "type": "cell_state",
+                    "value": max(round4(cell.genomic_instability), 0.04),
+                    "description": f"{round4(cell.genomic_instability) * 100:.1f}% modeled instability carried forward from the cell phenotype layer.",
+                },
+            ],
+        },
     )

@@ -10,11 +10,9 @@ from app.models import (
     AIChatRequest,
     AIChatResponse,
     AIStatusResponse,
-    CandidateGene,
     NormalizedEvidence,
     SearchResponse,
     SearchResultItem,
-    SimulationInputSummary,
     SimulationRequest,
     SimulationResult,
 )
@@ -25,13 +23,24 @@ from app.services.search_service import (
     search_diseases_endpoint,
     search_genes_endpoint,
     search_pathways_endpoint,
+    search_drugs_endpoint,
+    search_phenotypes_endpoint,
     search_variants_endpoint,
+    search_proteins_endpoint,
 )
-from app.services.cell_simulator import simulate_cell
-from app.services.population_simulator import simulate_population
-from app.services.ecosystem_simulator import simulate_ecosystem
-from app.evolution_simulator import EvolutionRequest, EvolutionResult, simulate_evolution
-from app.intervention_simulator import InterventionRequest, InterventionResult, simulate_intervention
+from app.services.simulation_service import run_simulation
+from app.services.reasoning_service import build_reasoning
+from app.services.evolution_service import EvolutionRequest, EvolutionResult, simulate_evolution
+from app.services.intervention_service import InterventionRequest, InterventionResult, simulate_intervention
+from app.services.intervention_evidence_service import fetch_intervention_evidence
+from app.services.digital_twin_service import (
+    DigitalTwinRequest,
+    DigitalTwinResult,
+    build_digital_twin,
+    build_known_disease_model,
+    rank_diseases,
+)
+from app.adapters.alphafold import build_alphafold_summary
 
 app = FastAPI(
     title="BioScale Simulator API",
@@ -61,6 +70,9 @@ def _to_search_response(payload: dict) -> SearchResponse:
             id=str(item.get("id") or item.get("stId") or item.get("symbol") or item.get("accession") or ""),
             label=item.get("name") or item.get("symbol") or item.get("displayName") or item.get("title") or item.get("notation") or "",
             subtitle=item.get("description") or item.get("classification") or item.get("protein_name"),
+            description=item.get("description") or item.get("summary") or item.get("detail"),
+            synonyms=item.get("synonyms", []) if isinstance(item.get("synonyms"), list) else [],
+            normalized_mapping=item.get("normalized_mapping", {}) if isinstance(item.get("normalized_mapping"), dict) else {},
             source=item.get("source") or payload.get("source", "Unknown"),
             meta=item,
         )
@@ -131,6 +143,34 @@ def search_pathways(
     return _to_search_response(search_pathways_endpoint(q, gene=gene, limit=limit))
 
 
+@app.get("/api/search/proteins", response_model=SearchResponse)
+def search_proteins(q: str = Query(min_length=1), limit: int = Query(default=10, le=25)) -> SearchResponse:
+    return _to_search_response(search_proteins_endpoint(q, limit=limit))
+
+
+@app.get("/api/search/drugs", response_model=SearchResponse)
+def search_drugs(
+    q: str = Query(min_length=1),
+    target: Optional[str] = Query(default=None),
+    limit: int = Query(default=10, le=25),
+) -> SearchResponse:
+    return _to_search_response(search_drugs_endpoint(q, target=target, limit=limit))
+
+
+@app.get("/api/drug/evidence")
+def drug_evidence(
+    drug: str = Query(min_length=1),
+    gene: Optional[str] = Query(default=""),
+    mutation: Optional[str] = Query(default=""),
+) -> dict:
+    return fetch_intervention_evidence(drug, gene or "", mutation or "")
+
+
+@app.get("/api/search/phenotypes", response_model=SearchResponse)
+def search_phenotypes(q: str = Query(min_length=1), limit: int = Query(default=10, le=25)) -> SearchResponse:
+    return _to_search_response(search_phenotypes_endpoint(q, limit=limit))
+
+
 @app.get("/api/evidence", response_model=NormalizedEvidence)
 def evidence(
     disease_id: str = Query(default="EFO_0000311"),
@@ -152,77 +192,18 @@ def evidence(
     )
 
 
+@app.get("/api/structure/alphafold")
+def alphafold_structure(
+    uniprot_accession: str = Query(min_length=1),
+    position: Optional[int] = Query(default=None, ge=1),
+) -> dict:
+    return build_alphafold_summary(uniprot_accession, position=position)
+
+
 @app.post("/api/simulate", response_model=SimulationResult)
 def simulate(req: SimulationRequest) -> SimulationResult:
-    kb = load_knowledge_base()
-    disease_id = req.disease_id
-    disease_name = req.disease_name or req.disease or disease_id
-    if req.disease and req.disease in kb.get("diseases", {}) and not req.disease_name:
-        disease_name = kb["diseases"][req.disease]["label"]
-
     try:
-        discovery, mutation, protein, pathway, evidence, external_available, notice = run_searchable_pipeline(
-            kb,
-            disease_id,
-            disease_name,
-            req.gene,
-            req.mutation,
-            req.use_external_evidence,
-            req.pathway_id,
-            req.pathway_name,
-        )
-
-        gene_symbol = req.gene
-        selected = next((c for c in discovery.candidates if c.symbol == gene_symbol), None)
-        if selected is None:
-            selected = CandidateGene(
-                symbol=gene_symbol,
-                score=0.5,
-                reasons=[f"User-selected gene {gene_symbol}"],
-                source="User selection",
-            )
-
-        cell = simulate_cell(pathway)
-        population = simulate_population(cell, req)
-        ecosystem = simulate_ecosystem(cell, population, req)
-
-        simulation_input = SimulationInputSummary(
-            disease_name=disease_name,
-            disease_id=disease_id,
-            gene_symbol=gene_symbol,
-            gene_id=evidence.gene.get("ensembl_id") if evidence else None,
-            mutation=mutation.mutation,
-            protein_accession=protein.protein_id,
-            pathway_name=pathway.selected_pathway_name or pathway.label,
-            pathway_id=pathway.selected_pathway_id or pathway.pathway_id,
-            pathway_source=pathway.selected_pathway_source,
-        )
-
-        research_summary = (
-            f"Selected {disease_name} ({disease_id}), gene {gene_symbol}, variant {mutation.mutation}. "
-            f"Protein activity={protein.activity:.2f}, stability={protein.stability:.2f}, binding={protein.binding:.2f}. "
-            f"Pathway disruptions={len(pathway.disrupted_processes)}. "
-            f"Population mutated fraction={population.final_mutated_fraction:.2f}. "
-            f"Ecosystem risk={ecosystem.ecosystem_risk_score:.2f}."
-        )
-
-        return SimulationResult(
-            request=req,
-            simulation_input=simulation_input,
-            disease_discovery=discovery,
-            selected_candidate=selected,
-            mutation_result=mutation,
-            protein_effect=protein,
-            pathway_result=pathway,
-            cell_phenotype=cell,
-            population_result=population,
-            ecosystem_result=ecosystem,
-            research_summary=research_summary,
-            citations=[{"name": s, "purpose": "database evidence"} for s in evidence.sources],
-            external_evidence_available=external_available,
-            evidence_notice=notice,
-            evidence=evidence,
-        )
+        return run_simulation(req)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -232,9 +213,56 @@ def evolution(req: EvolutionRequest) -> EvolutionResult:
     return simulate_evolution(req)
 
 
+@app.post("/api/evolution/simulate", response_model=EvolutionResult)
+def evolution_simulate(req: EvolutionRequest) -> EvolutionResult:
+    return simulate_evolution(req)
+
+
 @app.post("/api/intervention", response_model=InterventionResult)
 def intervention(req: InterventionRequest) -> InterventionResult:
     return simulate_intervention(req)
+
+
+@app.post("/api/intervention/build")
+def intervention_build(req: InterventionRequest) -> dict:
+    evidence = fetch_intervention_evidence(req.drug_name or "", req.gene, req.mutation) if req.drug_name else {
+        "available": False,
+        "known_targets": [],
+        "mechanism": "Non-drug or generic mechanism-based intervention.",
+        "source_summaries": [],
+    }
+    return {
+        "request": req.model_dump(),
+        "evidence": evidence,
+        "suggested_target": (evidence.get("known_targets") or [req.target])[0],
+        "mechanism": evidence.get("mechanism", "Generic mechanism-based intervention"),
+        "disclaimer": "Research simulation only — not treatment advice.",
+    }
+
+
+@app.post("/api/intervention/simulate", response_model=InterventionResult)
+def intervention_simulate(req: InterventionRequest) -> InterventionResult:
+    return simulate_intervention(req)
+
+
+@app.post("/api/digital-twin", response_model=DigitalTwinResult)
+def digital_twin(req: DigitalTwinRequest) -> DigitalTwinResult:
+    return build_digital_twin(req)
+
+
+@app.post("/api/patient-digital-twin/rank-diseases", response_model=DigitalTwinResult)
+def patient_digital_twin_rank_diseases(req: DigitalTwinRequest) -> DigitalTwinResult:
+    return rank_diseases(req)
+
+
+@app.post("/api/patient-digital-twin/known-disease-model", response_model=DigitalTwinResult)
+def patient_digital_twin_known_disease_model(req: DigitalTwinRequest) -> DigitalTwinResult:
+    return build_known_disease_model(req)
+
+
+@app.post("/api/reasoning")
+def reasoning(result: SimulationResult) -> dict:
+    return build_reasoning(result)
 
 
 @app.post("/api/ai/chat", response_model=AIChatResponse)

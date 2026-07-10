@@ -890,6 +890,68 @@ function MetricGauge({ label, value, highlight = false }: { label: string; value
   );
 }
 
+function phenotypeTraits(cell: CellPhenotypeResult) {
+  const details = cell.trait_details ?? {};
+  const fallback = [
+    ["proliferation", "Proliferation", cell.proliferation_rate, "Probability that the cell continues dividing under the current pathway state."],
+    ["apoptosis", "Apoptosis/death response", cell.apoptosis_rate, "Probability that the altered cell is removed through death-response signaling."],
+    ["repair_capacity", "Repair/homeostasis capacity", cell.repair_capacity, "Probability that the cell can repair damage or return toward homeostasis."],
+    ["stress_response", "Stress response", cell.stress_level, "Probability that the cell is under modeled damage or pathway stress."],
+    ["inflammation_signal", "Inflammation signal", cell.inflammatory_signal, "Probability of inflammatory signaling from the altered cell state."],
+    ["genomic_instability", "Genomic instability", cell.genomic_instability, "Probability that the altered cell state carries unstable genomic behavior."],
+  ] as const;
+  return fallback.map(([key, label, score, explanation]) => ({
+    key,
+    label: details[key]?.label ?? label,
+    score: details[key]?.score ?? score,
+    confidence: details[key]?.confidence ?? 0.5,
+    provenance: details[key]?.provenance ?? "computed_model: Cell simulator",
+    explanation: details[key]?.explanation ?? explanation,
+  }));
+}
+
+function PhenotypeRadar({ traits }: { traits: ReturnType<typeof phenotypeTraits> }) {
+  const cx = 190;
+  const cy = 170;
+  const radius = 112;
+  const angle = (index: number) => -Math.PI / 2 + (index / traits.length) * Math.PI * 2;
+  const point = (index: number, value: number) => {
+    const a = angle(index);
+    return {
+      x: cx + Math.cos(a) * radius * Math.max(0, Math.min(1, value)),
+      y: cy + Math.sin(a) * radius * Math.max(0, Math.min(1, value)),
+    };
+  };
+  const polygon = traits.map((trait, index) => {
+    const p = point(index, trait.score);
+    return `${p.x},${p.y}`;
+  }).join(" ");
+  return (
+    <svg viewBox="0 0 380 340" className="phenotypeRadarSvg" role="img" aria-label="Cell phenotype radar chart">
+      {[0.25, 0.5, 0.75, 1].map((level) => (
+        <circle key={level} cx={cx} cy={cy} r={radius * level} className="radarRing" />
+      ))}
+      {traits.map((trait, index) => {
+        const end = point(index, 1);
+        const label = point(index, 1.18);
+        return (
+          <g key={trait.key}>
+            <line x1={cx} y1={cy} x2={end.x} y2={end.y} className="radarAxis" />
+            <text x={label.x} y={label.y} textAnchor="middle" className="radarLabel">{trait.label.replace("/homeostasis", "")}</text>
+          </g>
+        );
+      })}
+      <polygon points={polygon} className="radarPolygon" />
+      {traits.map((trait, index) => {
+        const p = point(index, trait.score);
+        return <circle key={trait.key} cx={p.x} cy={p.y} r="5" className="radarPoint" />;
+      })}
+      <text x={cx} y={cy - 5} textAnchor="middle" className="cellTitleSmall">cell state</text>
+      <text x={cx} y={cy + 15} textAnchor="middle" className="cellTitle">{fmt(traits.reduce((sum, trait) => sum + trait.score, 0) / traits.length)}</text>
+    </svg>
+  );
+}
+
 export function CellPhenotypeVisual({
   cell,
   diseaseName,
@@ -965,6 +1027,7 @@ export function CellPhenotypeVisual({
   const [focused, setFocused] = useState(organelles[1].id);
   const selected = pickByName(organelles, focused);
   const diseaseSite = inferTissueSite(diseaseName);
+  const traits = phenotypeTraits(cell);
   return (
     <div className="visualPanel">
       <div className="visualPanelHeader">
@@ -978,6 +1041,42 @@ export function CellPhenotypeVisual({
           <span className="visualMeta">Functional loss {fmt(cell.functional_loss_score ?? 0.5)}</span>
           <span className="visualMeta">Pathway disruption {fmt(cell.pathway_disruption_score ?? 0.5)}</span>
         </div>
+      </div>
+
+      <div className="phenotypeModelPanel">
+        <div>
+          <p className="visualEyebrow">Computed phenotype model</p>
+          <h3>Cell-level trait profile</h3>
+          <p className="visualSubtext">
+            Uses protein effect, pathway node activity, pathway disruption, and upstream BioScale outputs. Scores are deterministic 0–1 model outputs, not clinical probabilities.
+          </p>
+          <details className="advancedInputsPanel">
+            <summary>Advanced inputs used by this model</summary>
+            <div>
+              <span>DNA/pathway damage <strong>{fmt(cell.pathway_disruption_score ?? cell.genomic_instability)}</strong></span>
+              <span>Stress response <strong>{fmt(cell.stress_level)}</strong></span>
+              <span>Baseline proliferation <strong>{fmt(0.5)}</strong></span>
+              <span>Baseline repair <strong>{fmt(0.5)}</strong></span>
+              <span>Baseline inflammation <strong>{fmt(0.5)}</strong></span>
+            </div>
+          </details>
+          <PhenotypeRadar traits={traits} />
+        </div>
+        <div className="phenotypeTraitGrid">
+          {traits.map((trait) => (
+            <article key={trait.key} className="phenotypeTraitTile">
+              <span>{trait.label}</span>
+              <strong>{fmt(trait.score)}</strong>
+              <div className="barOuter"><div className={trait.score >= 0.5 ? "barInner increased" : "barInner decreased"} style={{ width: `${Math.max(0, Math.min(1, trait.score)) * 100}%` }} /></div>
+              <p>{trait.explanation}</p>
+              <small>Confidence {fmt(trait.confidence)} · {trait.provenance}</small>
+            </article>
+          ))}
+        </div>
+      </div>
+      <div className="visualCallout">
+        <strong>What this means biologically</strong>
+        <p>{cell.explanation} The radar chart shows which cell programs are strongest for the selected disease, gene, mutation, pathway, and upstream protein/pathway model outputs.</p>
       </div>
 
       <div className="cellVisualLayout">
@@ -1165,10 +1264,12 @@ export function EcosystemVisual({ ecosystem, diseaseName }: { ecosystem: Ecosyst
   const site = useMemo(() => inferTissueSite(diseaseName), [diseaseName]);
   const scene = useMemo(() => buildEcosystemScene(site, ecosystem), [ecosystem, site]);
   const [focused, setFocused] = useState(scene.areas[0]?.id ?? "primary");
+  const [zoom, setZoom] = useState(1);
   useEffect(() => {
     setFocused(scene.areas[0]?.id ?? "primary");
   }, [scene.key]);
   const selected = pickByName(scene.areas, focused);
+  const highlightY = scene.key === "head" ? 88 : scene.key === "thorax" || scene.key === "chest" ? 160 : scene.key === "pelvis" ? 275 : scene.key === "skin" ? 205 : 230;
   return (
     <div className="visualPanel">
       <div className="visualPanelHeader">
@@ -1181,6 +1282,51 @@ export function EcosystemVisual({ ecosystem, diseaseName }: { ecosystem: Ecosyst
           <span className="visualMeta">Risk score {fmt(ecosystem.ecosystem_risk_score)}</span>
           <span className="visualMeta">Immune clearance {fmt(ecosystem.immune_clearance)}</span>
           <span className="visualMeta">Nutrient stress {fmt(ecosystem.nutrient_stress)}</span>
+        </div>
+      </div>
+
+      <div className="bodyModelPanel">
+        <div className="bodyModelControls">
+          <div>
+            <p className="visualEyebrow">Affected body-site model</p>
+            <h3>{site.organ} focus</h3>
+            <p className="visualSubtext">{scene.bodyNote}</p>
+          </div>
+          <div>
+            <button type="button" onClick={() => setZoom((value) => Math.max(0.8, value - 0.2))}>−</button>
+            <span>{Math.round(zoom * 100)}%</span>
+            <button type="button" onClick={() => setZoom((value) => Math.min(1.8, value + 0.2))}>+</button>
+          </div>
+        </div>
+        <div className="bodyModelViewport">
+          <svg viewBox="0 0 360 420" className="bodyModelSvg" style={{ transform: `scale(${zoom})` }} role="img" aria-label="Body model with affected ecosystem regions">
+            <defs>
+              <linearGradient id="bodyDepth" x1="0%" x2="100%">
+                <stop offset="0%" stopColor="#e8f4ee" />
+                <stop offset="55%" stopColor="#cfe1d5" />
+                <stop offset="100%" stopColor="#9fcbb8" />
+              </linearGradient>
+              <radialGradient id="affectedGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#c84d4d" stopOpacity="0.85" />
+                <stop offset="100%" stopColor="#c84d4d" stopOpacity="0.05" />
+              </radialGradient>
+            </defs>
+            <ellipse cx="180" cy="62" rx="44" ry="52" fill="url(#bodyDepth)" stroke="#9fcbb8" strokeWidth="2" />
+            <path d="M126 116 C 92 156 82 226 105 320 C 126 384 234 384 255 320 C 278 226 268 156 234 116 C 211 132 149 132 126 116 Z" fill="url(#bodyDepth)" stroke="#9fcbb8" strokeWidth="2" />
+            <path d="M121 145 C 86 178 62 226 55 292" className="bodyLimb" />
+            <path d="M239 145 C 274 178 298 226 305 292" className="bodyLimb" />
+            <path d="M144 360 C 130 388 120 404 110 414" className="bodyLimb" />
+            <path d="M216 360 C 230 388 240 404 250 414" className="bodyLimb" />
+            <ellipse cx="180" cy={highlightY} rx={scene.key === "multisite" ? 82 : 52} ry={scene.key === "multisite" ? 128 : 38} fill="url(#affectedGlow)" />
+            <circle cx="180" cy={highlightY} r={18 + ecosystem.ecosystem_risk_score * 22} fill="#c84d4d" opacity="0.72" />
+            <text x="180" y={highlightY + 55} textAnchor="middle" className="bodyModelLabel">{site.organ}</text>
+            {scene.areas.slice(0, 5).map((area, index) => (
+              <g key={area.id} onClick={() => setFocused(area.id)} className="bodyAffectedPin">
+                <circle cx={75 + index * 52} cy="26" r={8 + area.value * 8} fill={area.accent} opacity="0.85" />
+                <text x={75 + index * 52} y="51" textAnchor="middle">{area.label}</text>
+              </g>
+            ))}
+          </svg>
         </div>
       </div>
 

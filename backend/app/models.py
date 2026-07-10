@@ -9,6 +9,7 @@ ProvenanceCategory = Literal[
     "local_curated",
     "simulator_assumption",
     "computed_model",
+    "missing_evidence",
 ]
 
 
@@ -22,6 +23,9 @@ class SearchResultItem(BaseModel):
     id: str
     label: str
     subtitle: Optional[str] = None
+    description: Optional[str] = None
+    synonyms: List[str] = Field(default_factory=list)
+    normalized_mapping: Dict[str, Any] = Field(default_factory=dict)
     source: str = "Open Targets"
     meta: Dict[str, Any] = Field(default_factory=dict)
 
@@ -138,7 +142,7 @@ class ProteinEffectResult(BaseModel):
     function_summary: Optional[str] = None
     mutation_location: Optional[str] = None
     domain_hit: Optional[str] = None
-    structural_impact_placeholder: str = "AlphaFold structural mapping not yet integrated (TODO)."
+    structural_impact_placeholder: str = "AlphaFold structure context is checked when a UniProt accession is available."
     functional_impact_summary: Optional[str] = None
     source: str = "UniProt"
     summary: Optional[str] = None
@@ -215,6 +219,7 @@ class CellPhenotypeResult(BaseModel):
     computed_from_protein_activity: Optional[str] = None
     source: str = "Cell simulator"
     provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
+    trait_details: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
 
 class PopulationPoint(BaseModel):
@@ -248,6 +253,7 @@ class EcosystemResult(BaseModel):
     computed_from_protein_activity: Optional[str] = None
     source: str = "Ecosystem simulator"
     provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
+    ecosystem_hierarchy: Dict[str, Any] = Field(default_factory=dict)
 
 
 class SimulationInputSummary(BaseModel):
@@ -255,11 +261,19 @@ class SimulationInputSummary(BaseModel):
     disease_id: str
     gene_symbol: str
     gene_id: Optional[str] = None
+    uniprot_accession: Optional[str] = None
+    protein_name: Optional[str] = None
     mutation: str
+    hgvs_notation: Optional[str] = None
+    clinvar_variation_id: Optional[str] = None
+    rsid: Optional[str] = None
     protein_accession: Optional[str] = None
+    alphafold_available: bool = False
+    alphafold_confidence_label: Optional[str] = None
     pathway_name: Optional[str] = None
     pathway_id: Optional[str] = None
     pathway_source: Optional[str] = None
+    data_source_status: Dict[str, str] = Field(default_factory=dict)
 
 
 class NormalizedEvidence(BaseModel):
@@ -292,3 +306,4 @@ class SimulationResult(BaseModel):
     evidence_notice: Optional[str] = None
     disclaimer: str = "Research prototype only, not a diagnostic tool."
     evidence: Optional[NormalizedEvidence] = None
+    reasoning: Optional[Dict[str, Any]] = None
