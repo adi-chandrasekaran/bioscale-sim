@@ -193,4 +193,4 @@ def test_alphafold_url_builder_is_deterministic():
 def test_alphafold_status_fails_closed(mock_get):
     status = safe_get_structure_status("CACHEMISS_TEST_ACCESSION", position=175)
     assert status["alphafold_available"] is False
-    assert status["confidence_label"] == "unknown"
+    assert status["confidence_label"] == "unavailable"

@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from typing import Optional
 import os
+import sys
+from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+if __package__ and __package__.startswith("backend."):
+    backend_root = Path(__file__).resolve().parents[1]
+    if str(backend_root) not in sys.path:
+        sys.path.insert(0, str(backend_root))
+
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import (
@@ -40,7 +47,7 @@ from app.services.digital_twin_service import (
     build_known_disease_model,
     rank_diseases,
 )
-from app.adapters.alphafold import build_alphafold_summary
+from app.adapters.alphafold import build_alphafold_summary, fetch_pdb_text
 
 app = FastAPI(
     title="BioScale Simulator API",
@@ -58,6 +65,7 @@ app.add_middleware(
         ).split(",")
         if origin.strip()
     ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):\d+$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -196,8 +204,20 @@ def evidence(
 def alphafold_structure(
     uniprot_accession: str = Query(min_length=1),
     position: Optional[int] = Query(default=None, ge=1),
+    mutation: Optional[str] = Query(default=None),
 ) -> dict:
-    return build_alphafold_summary(uniprot_accession, position=position)
+    return build_alphafold_summary(uniprot_accession, position=position, mutation=mutation)
+
+
+@app.get("/api/structure/alphafold/pdb")
+def alphafold_pdb_proxy(uniprot_accession: str = Query(min_length=1)) -> Response:
+    try:
+        pdb_text = fetch_pdb_text(uniprot_accession)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"AlphaFold PDB could not be loaded: {exc}") from exc
+    if not pdb_text:
+        raise HTTPException(status_code=404, detail="AlphaFold PDB text was empty or unavailable.")
+    return Response(content=pdb_text, media_type="chemical/x-pdb")
 
 
 @app.post("/api/simulate", response_model=SimulationResult)

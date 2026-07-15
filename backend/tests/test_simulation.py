@@ -250,3 +250,35 @@ def test_alphafold_residue_plddt_parser_reads_pdb_bfactor():
     )
 
     assert _residue_plddt_from_pdb(pdb, 175) == 85.0
+
+
+def test_alphafold_summary_parses_mutation_and_uses_pdb_confidence():
+    from app.adapters.alphafold import build_alphafold_summary
+
+    pdb = (
+        "ATOM      1  N   ARG A 175      11.104  13.207   2.100  1.00 84.50           N\n"
+        "ATOM      2  CA  ARG A 175      12.204  14.107   2.500  1.00 85.50           C\n"
+        "ATOM      3  N   GLY A 176      13.104  15.207   2.900  1.00 40.00           N\n"
+    )
+    with patch("app.adapters.alphafold.safe_get_alphafold_metadata", return_value={"available": False, "entries": [], "error": None}), \
+         patch("app.adapters.alphafold.fetch_pdb_text", return_value=pdb), \
+         patch("app.adapters.alphafold._safe_uniprot_domain_hit", return_value="Domain: DNA-binding (102-292)"):
+        summary = build_alphafold_summary("P04637", position=175, mutation="p.R175H")
+
+    assert summary["alphafold_available"] is True
+    assert summary["normal_residue"] == "R"
+    assert summary["mutant_residue"] == "H"
+    assert summary["residue_confidence"] == 85.0
+    assert summary["global_confidence"] is not None
+    assert summary["domain_hit"] == "Domain: DNA-binding (102-292)"
+    assert summary["pdb_proxy_url"].endswith("uniprot_accession=P04637")
+
+
+def test_alphafold_pdb_proxy_returns_pdb_text():
+    pdb = "ATOM      1  CA  ARG A 175      12.204  14.107   2.500  1.00 85.50           C\n"
+    with patch("app.main.fetch_pdb_text", return_value=pdb):
+        response = client.get("/api/structure/alphafold/pdb", params={"uniprot_accession": "P04637"})
+
+    assert response.status_code == 200
+    assert response.text == pdb
+    assert response.headers["content-type"].startswith("chemical/x-pdb")

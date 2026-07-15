@@ -2200,36 +2200,99 @@ p { color: #2c3b37; line-height: 1.58; }
   padding: 10px 12px;
 }
 
-.proteinStructureGrid {
+.proteinStructureSingle {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
-.proteinStructureGrid section {
+.proteinStructureSingle section {
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--panel-bg);
 }
 
-.proteinStructureGrid h4 {
+.proteinStructureSingleHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.proteinStructureSingle h4 {
   margin: 0 0 6px;
   color: var(--text);
 }
 
-.proteinModelViewer {
-  min-height: 340px;
+.proteinModelViewport {
+  position: relative;
+  width: 100%;
+  height: clamp(360px, 48vw, 560px);
   border: 1px solid var(--border);
   border-radius: 14px;
   background: #fff;
   overflow: hidden;
 }
 
+.proteinModelViewport.ready .proteinModelLoading {
+  display: none;
+}
+
+.proteinModelViewer {
+  position: absolute;
+  inset: 0;
+}
+
+.proteinModelViewer canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.proteinModelLoading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted-text);
+  font-weight: 800;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 36%),
+    #fff;
+}
+
 .proteinModelPane .muted {
   margin: 8px 0 0;
   font-size: 13px;
 }
+
+.structureDebug {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-alt-bg);
+}
+
+.structureDebug summary {
+  cursor: pointer;
+  color: var(--badge-text);
+  font-weight: 900;
+}
+
+.structureDebug dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.structureDebug div { min-width: 0; }
+.structureDebug dt { color: var(--badge-text); font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.structureDebug dd { margin: 3px 0 0; color: var(--muted-text); font-size: 12px; overflow-wrap: anywhere; }
 
 .phenotypeModelPanel {
   display: grid;
@@ -2409,7 +2472,7 @@ p { color: #2c3b37; line-height: 1.58; }
 @media (max-width: 900px) {
   .hero, .grid, .controlPanel, .searchPanel, .twoCols, .proteinVisualGrid, .populationVisualGrid, .ecosystemVisualGrid, .cellVisualLayout, .ecosystemSidePanel, .advancedInterventionGrid, .interventionVisualGrid, .evidenceSummaryGrid { grid-template-columns: 1fr; }
   .structureMetricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .proteinStructureGrid,
+  .proteinStructureSingle,
   .phenotypeModelPanel,
   .phenotypeTraitGrid {
     grid-template-columns: 1fr;
@@ -2436,6 +2499,7 @@ p { color: #2c3b37; line-height: 1.58; }
   .miniMetricGrid { grid-template-columns: 1fr; }
   .d3ChartHeader,
   .structurePanelHeader,
+  .proteinStructureSingleHeader,
   .structureLinks {
     flex-direction: column;
     align-items: flex-start;
