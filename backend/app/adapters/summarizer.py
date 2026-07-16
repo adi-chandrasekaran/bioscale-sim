@@ -6,6 +6,33 @@ from typing import Any, Dict, List, Optional
 CITATION_RE = re.compile(r"\{ECO:\d+\|PubMed:\d+\}|\{ECO:[^}]+\}|PubMed:\d+|ECO:\d+\|PubMed:\d+")
 WHITESPACE_RE = re.compile(r"\s+")
 
+GENE_FUNCTION_FALLBACKS: Dict[str, str] = {
+    "APC": "A tumor suppressor that helps regulate WNT signaling and cell adhesion; loss of APC can let intestinal cells grow when they should stop.",
+    "ALK": "A receptor tyrosine kinase involved in growth and nervous-system development; activating rearrangements or mutations can drive cancer signaling.",
+    "BRAF": "A kinase in the MAPK pathway that relays growth signals; activating mutations can keep proliferation signaling switched on.",
+    "BRCA1": "A DNA repair and checkpoint protein that helps preserve chromosome stability, especially through homologous recombination repair.",
+    "BRCA2": "A homologous recombination repair protein that helps RAD51 repair DNA double-strand breaks and maintain chromosome integrity.",
+    "EGFR": "A receptor tyrosine kinase that senses growth signals at the cell surface and can drive proliferation and survival when overactive.",
+    "ERBB2": "A receptor tyrosine kinase in the EGFR family; amplification or activation can increase growth and survival signaling.",
+    "KRAS": "A small GTPase that transmits receptor growth signals to MAPK and PI3K pathways; activating mutations can lock growth signaling on.",
+    "MET": "A hepatocyte growth factor receptor tyrosine kinase that promotes growth, motility, invasion, and survival signaling when activated.",
+    "MLH1": "A DNA mismatch repair protein that helps correct replication errors; loss can cause microsatellite instability.",
+    "MSH2": "A DNA mismatch repair protein that recognizes base-pairing errors with MSH6 or MSH3 and helps start repair.",
+    "MSH6": "A DNA mismatch repair protein that partners with MSH2 to detect single-base mismatches and small insertion-deletion loops.",
+    "NRAS": "A RAS-family GTPase that controls MAPK and PI3K growth signaling; activating mutations can promote uncontrolled proliferation.",
+    "PMS2": "A DNA mismatch repair endonuclease that works with MLH1 to repair replication errors and preserve genome stability.",
+    "PTEN": "A tumor suppressor phosphatase that restrains PI3K-AKT growth and survival signaling.",
+    "RB1": "A tumor suppressor that controls the G1/S cell-cycle checkpoint by restraining E2F transcription factors until division is appropriate.",
+    "RET": "A receptor tyrosine kinase involved in cell growth and neural-crest development; mutations or fusions can drive MAPK and PI3K signaling.",
+    "TP53": "A stress-response transcription factor that can trigger cell-cycle arrest, DNA repair, senescence, or apoptosis after cellular damage.",
+}
+
+PLACEHOLDER_DEFINITION_PATTERNS = (
+    "local demo knowledge base",
+    "listed as disease-relevant",
+    "function evidence unavailable",
+)
+
 
 def strip_citations(text: str) -> str:
     cleaned = CITATION_RE.sub("", text)
@@ -32,6 +59,17 @@ def summarize_protein_function(raw_function: Optional[str], protein_name: str = 
     if len(summary) > 420:
         summary = summary[:417].rsplit(" ", 1)[0] + "..."
     return summary
+
+
+def known_gene_function(gene_symbol: str) -> str:
+    return GENE_FUNCTION_FALLBACKS.get(gene_symbol.strip().upper(), "")
+
+
+def is_placeholder_definition(text: Optional[str]) -> bool:
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(pattern in lowered for pattern in PLACEHOLDER_DEFINITION_PATTERNS)
 
 
 def summarize_gene_association(gene_symbol: str, gene_name: str, score: float, disease_name: str) -> str:
@@ -73,6 +111,12 @@ def summarize_disease_fallback(disease_name: str) -> str:
 
 
 def summarize_gene_fallback(gene_symbol: str, disease_name: str) -> str:
+    known = known_gene_function(gene_symbol)
+    if known:
+        return limit_sentences(
+            f"{known} In the context of {disease_name}, the simulator uses this gene function plus variant and pathway context when database association evidence is incomplete.",
+            3,
+        )
     return limit_sentences(
         f"{gene_symbol} is treated as the selected gene for {disease_name}. When database association scores are missing, the simulator uses the gene symbol, pathway links, and variant effect to continue the analysis.",
         2,
@@ -95,6 +139,9 @@ def summarize_pathway_fallback(gene_symbol: str) -> str:
 
 
 def summarize_protein_fallback(protein_name: str, gene_symbol: str) -> str:
+    known = known_gene_function(gene_symbol)
+    if known:
+        return limit_sentences(known, 2)
     label = protein_name or gene_symbol
     return limit_sentences(
         f"{label} has no curated protein function text in the current evidence bundle, so the simulator infers protein impact from gene identity, variant class, and pathway context.",

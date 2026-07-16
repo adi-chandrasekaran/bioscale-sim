@@ -48,17 +48,21 @@ Returns a single JSON bundle with normalized evidence from all adapters, plus ca
 
 ### `POST /api/simulate`
 
-New request field:
+Request fields related to external evidence:
 
 ```json
 {
-  "use_external_evidence": true
+  "use_external_evidence": true,
+  "protein_accession": "P04637",
+  "protein_name": "Cellular tumor antigen p53"
 }
 ```
 
 When `true` (default), the backend fetches external evidence, merges it into a copy of the local knowledge base, runs the existing simulators, and enriches the response with provenance metadata.
 
 When `false`, only `knowledge_base.json` is used.
+
+If a protein accession is supplied by the UI protein selector, the backend treats it as the strongest identifier. If not, the backend resolves the typed gene through UniProt gene search, then local mappings as a last fallback.
 
 If any adapter fails, the response includes:
 
@@ -78,28 +82,71 @@ Every value in cards 1–4 is tagged with one of five provenance categories:
 
 The frontend renders these as colored badges on each field.
 
+## Source Status
+
+Simulation responses include `simulation_input.source_status` and `evidence.source_status`. Each external source is marked with one of:
+
+- `available` — source returned usable evidence
+- `not_found` — source was reachable but did not have matching evidence
+- `input_unresolved` — the user input could not be resolved to the identifier that source needs
+- `api_unavailable` — source failed or timed out
+- `fallback_used` — local curated data or simulator fallback was used intentionally
+
 ## Caching
 
 Responses are cached in `backend/cache/` as JSON files keyed by SHA-256 hashes. Default TTL is 24 hours. This reduces repeated calls during development and demos.
 
 ## Normalization
 
-`app/adapters/normalizer.py` maps:
+`app/adapters/normalizer.py` and the public-source adapters map:
 
 - Local disease keys → Open Targets EFO IDs
-- Gene symbols → Ensembl IDs and default UniProt accessions
+- Gene symbols → Ensembl IDs and last-resort default UniProt accessions
 - UniProt accessions → AlphaFold IDs and structure URLs
 - HGVS protein notation → ClinVar search terms and amino-acid change text
 - Reactome payloads → stable pathway ID/name dictionaries
 
+UniProt accession resolution now uses this order:
+
+1. User-selected or typed UniProt accession
+2. HGNC symbol/alias lookup and HGNC UniProt mappings
+3. UniProt gene search for a reviewed human protein match
+4. Local `knowledge_base.json` mapping as the final fallback
+
+AlphaFold DB is queried from the resolved UniProt accession, so it is no longer limited to the TP53 demo case.
+
+When AlphaFold DB has no public structure, the structure panel now continues the evidence chain:
+
+1. RCSB PDB / UniProt PDB cross-references
+2. UniProt protein domains, regions, and sequence features
+3. A checked-not-found source audit only after those sources fail
+
+Every evidence source can report:
+
+- `available`
+- `procured_from_secondary_source`
+- `model_inferred_from_source`
+- `checked_not_found`
+- `api_unreachable`
+- `input_unresolved`
+
 ## Limitations
 
 - **Not a diagnostic tool.** ClinVar classifications and Open Targets scores are shown for research context only.
-- **Partial coverage.** Only genes and mutations present in the local knowledge base can be simulated end-to-end today.
-- **Simplified pathway graph.** Reactome provides membership evidence; the interactive graph still uses the local p53 teaching model.
+- **Evidence procurement before fallback.** Unknown or rare inputs first query HGNC, UniProt, Open Targets, ClinVar, CIViC, Reactome, AlphaFold DB, and structure-feature sources where relevant. Simulator fallback is shown only after the checked source chain cannot provide that evidence.
+- **Simplified pathway graph.** Reactome provides membership evidence; if Reactome cannot produce a usable pathway, the graph falls back to a dynamic gene-centered teaching model.
 - **Mutation effect multipliers** remain locally curated even when ClinVar returns a pathogenic classification.
 - **Rate limits.** NCBI E-utilities and public APIs may throttle or fail; the fallback path is always available.
 - **Neurodegeneration demo genes** (APOE, TREM2, etc.) have disease metadata but limited local mutation/pathway data.
+
+## Intervention Color Semantics
+
+Intervention before/after metrics keep `direction`, `delta`, and `magnitude`, but now also include:
+
+- `semantic_effect`: `beneficial`, `harmful`, or `neutral`
+- `semantic_explanation`: why that direction is biologically interpreted that way
+
+The frontend colors intervention bars by semantic effect, not raw increase/decrease. For example, reduced proliferation can be green because it is beneficial in the modeled disease context, while increased toxicity is red.
 
 ## Running Tests
 

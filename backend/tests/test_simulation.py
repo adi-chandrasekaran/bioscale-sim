@@ -274,6 +274,21 @@ def test_alphafold_summary_parses_mutation_and_uses_pdb_confidence():
     assert summary["pdb_proxy_url"].endswith("uniprot_accession=P04637")
 
 
+def test_alphafold_summary_uses_pdb_or_feature_fallback_when_alphafold_missing():
+    from app.adapters.alphafold import build_alphafold_summary
+
+    with patch("app.adapters.alphafold.safe_get_alphafold_metadata", return_value={"available": False, "entries": [], "error": "404 Client Error"}), \
+         patch("app.adapters.alphafold.fetch_pdb_text", side_effect=RuntimeError("404 Client Error")), \
+         patch("app.adapters.alphafold._uniprot_pdb_crossrefs", return_value=[{"id": "1MIU", "method": "X-ray", "source": "RCSB PDB"}]), \
+         patch("app.adapters.alphafold._uniprot_feature_model", return_value={"features": [{"type": "Region", "description": "BRCA2 repeat", "start": 100, "end": 220, "contains_position": True}], "sequence_length": 3418, "position": 175}):
+        summary = build_alphafold_summary("P51587", position=175, mutation="p.R175H")
+
+    assert summary["alphafold_available"] is False
+    assert summary["structure_source"] == "rcsb_pdb"
+    assert summary["structure_source_label"] == "RCSB PDB"
+    assert summary["structure_view_model"]["features"][0]["contains_position"] is True
+
+
 def test_alphafold_pdb_proxy_returns_pdb_text():
     pdb = "ATOM      1  CA  ARG A 175      12.204  14.107   2.500  1.00 85.50           C\n"
     with patch("app.main.fetch_pdb_text", return_value=pdb):

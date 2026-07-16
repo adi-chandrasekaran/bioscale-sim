@@ -29,7 +29,7 @@ const interventionHelp = {
   },
   modifiedBiology: {
     summary: "Shows how the proposed intervention changes target, pathway, cell, clone, and ecosystem variables.",
-    details: ["Green means a metric increased after intervention; red means it decreased.", "Whether an increase is good depends on the metric: apoptosis and immune clearance increasing can be beneficial, while proliferation, ecosystem risk, and off-target cost increasing can be concerning."],
+    details: ["Green means the modeled change is biologically beneficial; red means it is harmful; neutral or mixed effects are gray/amber.", "The card still states whether each metric increased or decreased, because direction and biological desirability are not the same thing."],
     examples: [],
   },
   mechanism: {
@@ -138,6 +138,8 @@ function buildMetricCards(output: InterventionResult) {
       summary: `If this occurs, there is a probability that ${metric.label} will ${metric.direction} by ${(metric.magnitude * 100).toFixed(1)}%.`,
       details: [
         `Before: ${(metric.before * 100).toFixed(1)}%. After: ${(metric.after * 100).toFixed(1)}%. Delta: ${formatSigned(metric.delta)}.`,
+        `Biological interpretation: ${metric.semantic_effect ?? "neutral"}. ${metric.semantic_explanation ?? "This effect is context-dependent."}`,
+        `Evidence basis: ${metric.evidence_basis || metric.provenance}. Semantic confidence: ${Math.round((metric.semantic_confidence ?? 0.5) * 100)}%.`,
         metric.explanation,
         `Rule: ${metric.formula_rule}. Provenance: ${metric.provenance}.`,
       ],
@@ -467,15 +469,16 @@ export function InterventionSimulator({ apiBase, baseline, evolution, scenario, 
         <SimulatorPanel title="Modified Biology" eyebrow="Before / after model" help={interventionHelp.modifiedBiology}>
           <div className="beforeAfterMetricGrid">
             {beforeAfterCards.map((metric) => (
-              <article key={metric.label} className={`metricChangeCard ${metric.direction}`}>
+              <article key={metric.label} className={`metricChangeCard ${metric.semantic_effect ?? "neutral"}`}>
                 <div className="metricChangeHeader">
                   <strong>{metric.label}<InfoTooltip label={metric.label} help={metric.help} /></strong>
-                  <span>{metric.direction} {formatSigned(metric.delta)}</span>
+                  <span>{metric.semantic_effect ?? "neutral"} · {metric.direction} {formatSigned(metric.delta)}</span>
                 </div>
                 <div className="metricChangeBars">
                   <span>Before <b>{metric.before.toFixed(2)}</b></span><div className="barOuter"><div className="barInner neutralBar" style={{ width: `${clamp01(metric.before) * 100}%` }} /></div>
-                  <span>After <b>{metric.after.toFixed(2)}</b></span><div className="barOuter"><div className={`barInner ${metric.direction === "decreased" ? "decreased" : "increased"}`} style={{ width: `${clamp01(metric.after) * 100}%` }} /></div>
+                  <span>After <b>{metric.after.toFixed(2)}</b></span><div className="barOuter"><div className={`barInner ${metric.semantic_effect ?? "neutral"}`} style={{ width: `${clamp01(metric.after) * 100}%` }} /></div>
                 </div>
+                {metric.semantic_explanation && <p className="metricSemantic">{metric.semantic_explanation}</p>}
                 <p>{metric.explanation}</p>
                 <small>{metric.provenance}</small>
               </article>

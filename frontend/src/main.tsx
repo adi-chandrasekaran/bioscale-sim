@@ -66,6 +66,36 @@ function fmt(value: number) {
   return Number.isFinite(value) ? value.toFixed(2) : "—";
 }
 
+const GENE_FUNCTION_FALLBACKS: Record<string, string> = {
+  APC: "A tumor suppressor that helps regulate WNT signaling and cell adhesion; loss of APC can let intestinal cells grow when they should stop.",
+  BRAF: "A kinase in the MAPK pathway that relays growth signals; activating mutations can keep proliferation signaling switched on.",
+  BRCA1: "A DNA repair and checkpoint protein that helps preserve chromosome stability, especially through homologous recombination repair.",
+  BRCA2: "A homologous recombination repair protein that helps RAD51 repair DNA double-strand breaks and maintain chromosome integrity.",
+  EGFR: "A receptor tyrosine kinase that senses growth signals at the cell surface and can drive proliferation and survival when overactive.",
+  KRAS: "A small GTPase that transmits receptor growth signals to MAPK and PI3K pathways; activating mutations can lock growth signaling on.",
+  MET: "A hepatocyte growth factor receptor tyrosine kinase that promotes growth, motility, invasion, and survival signaling when activated.",
+  MLH1: "A DNA mismatch repair protein that helps correct replication errors; loss can cause microsatellite instability.",
+  MSH2: "A DNA mismatch repair protein that recognizes base-pairing errors with MSH6 or MSH3 and helps start repair.",
+  MSH6: "A DNA mismatch repair protein that partners with MSH2 to detect single-base mismatches and small insertion-deletion loops.",
+  PTEN: "A tumor suppressor phosphatase that restrains PI3K-AKT growth and survival signaling.",
+  RB1: "A tumor suppressor that controls the G1/S cell-cycle checkpoint by restraining E2F transcription factors until division is appropriate.",
+  RET: "A receptor tyrosine kinase involved in cell growth and neural-crest development; mutations or fusions can drive MAPK and PI3K signaling.",
+  TP53: "A stress-response transcription factor that can trigger cell-cycle arrest, DNA repair, senescence, or apoptosis after cellular damage.",
+};
+
+function isPlaceholderDefinition(text?: string | null) {
+  if (!text) return false;
+  const normalized = text.toLowerCase();
+  return normalized.includes("local demo knowledge base") || normalized.includes("listed as disease-relevant") || normalized.includes("function evidence unavailable");
+}
+
+function candidateFunctionText(candidate: SimulationResult["disease_discovery"]["candidates"][number]) {
+  const fallback = GENE_FUNCTION_FALLBACKS[candidate.symbol.toUpperCase()];
+  const options = [candidate.function_summary, candidate.summary, candidate.reasons?.[0]].filter(Boolean) as string[];
+  const primary = options.find((text) => !isPlaceholderDefinition(text));
+  return primary || fallback || `${candidate.symbol} is included in the disease-gene ranking, but no concise public gene-function summary was retrieved.`;
+}
+
 function fallbackEcosystemHierarchy(result: SimulationResult): HierarchyDatum {
   return {
     name: `${result.simulation_input.disease_name} ecosystem`,
@@ -81,9 +111,11 @@ function fallbackEcosystemHierarchy(result: SimulationResult): HierarchyDatum {
 }
 
 function candidateDefinition(candidate: SimulationResult["disease_discovery"]["candidates"][number], diseaseName?: string) {
-  const base = candidate.function_summary || candidate.summary || candidate.reasons?.[0] || `${candidate.symbol} is a gene included in this disease-linked candidate list.`;
-  const diseaseLine = diseaseName ? `In this run, it is being evaluated in the context of ${diseaseName}.` : "";
-  return [base, diseaseLine].filter(Boolean).join(" ");
+  const base = candidateFunctionText(candidate);
+  const association = candidate.disease_association_summary || (diseaseName ? `It appears in the ranked disease-gene list for ${diseaseName}.` : "");
+  const source = candidate.function_source ? `Function source: ${candidate.function_source}.` : "";
+  const diseaseLine = diseaseName ? `Context: ${diseaseName}.` : "";
+  return [base, association, diseaseLine, source].filter(Boolean).join(" ");
 }
 
 function canonicalGeneSymbol(entity: SelectedEntity | null) {
@@ -228,6 +260,13 @@ function ComputedFromLine({ gene, pathway, proteinActivity }: { gene?: string; p
 
 function SimulationInputPanel({ input }: { input: SimulationResult["simulation_input"] }) {
   const dataSourceRows = Object.entries(input.data_source_status ?? {});
+  const statusClass = (status: string) => (
+    status === "available" || status === "procured_from_secondary_source" || status === "model_inferred_from_source"
+      ? "available"
+      : status === "api_unreachable" || status === "input_unresolved"
+        ? "unavailable"
+        : "checked"
+  );
   return (
     <section className="simulationInputPanel">
       <div className="cardTitleRow">
@@ -239,14 +278,14 @@ function SimulationInputPanel({ input }: { input: SimulationResult["simulation_i
         <div><span>Gene</span><strong>{input.gene_symbol}</strong><em>{input.gene_id || "—"}</em></div>
         <div><span>Mutation</span><strong>{input.mutation}</strong><em>{input.clinvar_variation_id ? `ClinVar ${input.clinvar_variation_id}` : input.rsid || "No ClinVar/rsID match"}</em></div>
         <div><span>Protein</span><strong>{input.protein_name || input.protein_accession || "—"}</strong><em>{input.uniprot_accession || input.protein_accession || "—"}</em></div>
-        <div><span>AlphaFold</span><strong>{input.alphafold_available ? "Available" : "Unavailable"}</strong><em>{input.alphafold_confidence_label || "confidence unknown"}</em></div>
+        <div><span>Structure</span><strong>{input.structure_source_label || (input.alphafold_available ? "AlphaFold DB" : "Checking sources")}</strong><em>{input.structure_status_reason || input.alphafold_confidence_label || "confidence unknown"}</em></div>
         <div><span>Pathway</span><strong>{input.pathway_name || "—"}</strong><em>{input.pathway_id || "—"}</em></div>
         <div><span>Pathway source</span><strong>{input.pathway_source || "—"}</strong></div>
       </div>
       {dataSourceRows.length > 0 && (
         <div className="sourceStatusGrid" aria-label="Database source status">
           {dataSourceRows.map(([source, status]) => (
-            <span key={source} className={status === "available" ? "sourceStatus available" : "sourceStatus unavailable"}>
+            <span key={source} className={`sourceStatus ${statusClass(status)}`}>
               {source}: {status}
             </span>
           ))}
@@ -278,6 +317,7 @@ function CandidateGeneCard({
   onSelect: () => void;
 }) {
   const definition = candidateDefinition(candidate, diseaseName);
+  const functionText = candidateFunctionText(candidate);
   return (
     <button
       type="button"
@@ -286,7 +326,10 @@ function CandidateGeneCard({
     >
       <div className="candidateMain">
         <strong>{candidate.symbol}</strong>
+        <span>{fmt(candidate.score)}</span>
       </div>
+      <p className="candidateReason">{functionText}</p>
+      {candidate.disease_association_summary && <p className="candidateAssociation">{candidate.disease_association_summary}</p>}
       <div className="candidateHoverBubble" aria-hidden="true">
         <strong>{candidate.symbol}</strong>
         <p>{definition}</p>
@@ -298,6 +341,7 @@ function CandidateGeneCard({
 }
 
 function LearningPanel({ result }: { result: SimulationResult }) {
+  const selectedGeneFunction = candidateFunctionText(result.selected_candidate);
   const assumptions = [
     "Activity, stability, binding, pathway propagation, population growth, and ecosystem risk are simulator assumptions or computed model outputs.",
     "AlphaFold is used only as structural context; it does not prove pathogenicity.",
@@ -312,7 +356,7 @@ function LearningPanel({ result }: { result: SimulationResult }) {
   return (
     <LayerCard title="Research Student Learning Panel" className="wide" footer="This panel explains the run in teaching language and separates evidence from model assumptions.">
       <div className="learningGrid">
-        <div><span>What is this gene?</span><p>{result.selected_candidate.function_summary || result.selected_candidate.summary || `${result.simulation_input.gene_symbol} is the selected gene for this run.`} In this simulation it is treated as the molecular starting point that connects the disease search result to the mutation, protein, pathway, cell, population, and ecosystem layers.</p></div>
+        <div><span>What is this gene?</span><p>{selectedGeneFunction} In this simulation it is treated as the molecular starting point that connects the disease search result to the mutation, protein, pathway, cell, population, and ecosystem layers.</p></div>
         <div><span>What is this mutation?</span><p>{result.mutation_result.summary || `${result.mutation_result.mutation} is interpreted as ${result.mutation_result.kind}.`} The simulator converts that variant class into activity, stability, and binding multipliers so the mutation can affect downstream biology.</p></div>
         <div><span>What is this protein/domain?</span><p>{result.protein_effect.function_summary || result.protein_effect.summary || `${result.protein_effect.protein_name} is the selected protein.`} {result.protein_effect.domain_hit ? `The mutation maps to ${result.protein_effect.domain_hit}, so the model treats that region as the affected functional context.` : "No specific domain hit was available, so the model uses the mutation-level functional effect."}</p></div>
         <div><span>What is this pathway?</span><p>{result.pathway_result.summary || result.pathway_result.description || "The pathway layer propagates the protein effect through connected biological steps."} Nodes in the pathway represent biological steps; edges represent modeled activation or inhibition between those steps.</p></div>
@@ -416,6 +460,8 @@ function App() {
       disease_name: disease.label,
       gene: geneSymbol,
       mutation: mutationNotation,
+      protein_accession: typeof protein?.meta?.accession === "string" ? protein.meta.accession : undefined,
+      protein_name: protein?.label,
       pathway_id: pathway?.id,
       pathway_name: pathway?.label,
       steps,

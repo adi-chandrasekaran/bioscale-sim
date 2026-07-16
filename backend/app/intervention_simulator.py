@@ -97,15 +97,56 @@ def _route_multiplier(route: str) -> float:
     return {"oral": 0.82, "IV": 0.94, "local": 0.9, "gene delivery": 0.82, "cell therapy": 0.78, "lifestyle/environmental": 0.62, "unknown/none": 0.72}.get(route, 0.72)
 
 
-def _metric(label: str, before: float, after: float, rule: str, provenance: str, explanation: str) -> dict[str, Any]:
+LOWER_IS_BENEFICIAL_METRICS = {
+    "target_activity",
+    "pathway_disruption",
+    "proliferation",
+    "inflammatory_signaling",
+    "stress_response",
+    "clone_fitness",
+    "affected_population_fraction",
+    "tissue_ecosystem_risk",
+    "off_target_biological_cost",
+    "uncertainty",
+}
+HIGHER_IS_BENEFICIAL_METRICS = {
+    "apoptosis_death_response",
+    "repair_homeostasis",
+    "immune_clearance",
+    "normal_population_fraction",
+}
+
+
+def _semantic_effect(metric_id: str, label: str, delta: float, evidence_basis: str) -> tuple[str, str, str, float]:
+    if abs(delta) < 0.003:
+        return "neutral", "no_material_change", f"{label} changed by less than 0.3 percentage points, so the model treats this as neutral.", 0.72
+    if metric_id in LOWER_IS_BENEFICIAL_METRICS:
+        effect = "beneficial" if delta < 0 else "harmful"
+        direction = "decrease" if delta < 0 else "increase"
+        return effect, "lower_is_beneficial", f"{label}: lower is biologically preferable in this disease-intervention model, so this {direction} is {effect}. Evidence basis: {evidence_basis}.", 0.86
+    if metric_id in HIGHER_IS_BENEFICIAL_METRICS:
+        effect = "beneficial" if delta > 0 else "harmful"
+        direction = "increase" if delta > 0 else "decrease"
+        return effect, "higher_is_beneficial", f"{label}: higher is biologically preferable in this disease-intervention model, so this {direction} is {effect}. Evidence basis: {evidence_basis}.", 0.86
+    return "neutral", "context_dependent", f"{label} has context-dependent meaning, so direction is shown without coloring it good or bad. Evidence basis: {evidence_basis}.", 0.5
+
+
+def _metric(metric_id: str, label: str, before: float, after: float, rule: str, provenance: str, explanation: str) -> dict[str, Any]:
     delta = round4(after - before)
+    semantic_effect, desirability_direction, semantic_explanation, semantic_confidence = _semantic_effect(metric_id, label, delta, provenance)
     return {
+        "metric_id": metric_id,
         "label": label,
         "before": round4(before),
         "after": round4(after),
         "delta": delta,
         "direction": "increased" if delta > 0 else "decreased" if delta < 0 else "unchanged",
         "magnitude": round4(abs(delta)),
+        "semantic_effect": semantic_effect,
+        "semantic_explanation": semantic_explanation,
+        "semantic_confidence": semantic_confidence,
+        "desirability_direction": desirability_direction,
+        "evidence_basis": provenance,
         "formula_rule": rule,
         "provenance": provenance,
         "explanation": explanation,
@@ -222,19 +263,19 @@ def simulate_intervention(req: InterventionRequest) -> InterventionResult:
         clone_response.append({"clone": str(clone.get("clone_name") or clone.get("name") or "Clone"), "suppression": round4(response), "fitness_after": round4(clamp(fitness - response * 0.25 + req.resistance_pressure * 0.08))})
 
     before_after = [
-        _metric("Target activity", req.pathway_activity, target_activity, "pathway_activity * (1 - net_effect * 0.55)", provenance, f"{req.target} activity is reduced according to exposure, specificity, tissue penetration, and timing."),
-        _metric("Pathway disruption", req.pathway_disruption, pathway_disruption, "pathway_disruption * (1 - net_effect * 0.48) + toxicity_drag * 0.12", provenance, "Pathway disruption falls when target modulation works, but biological cost can add residual disruption."),
-        _metric("Proliferation", req.proliferation, proliferation, "proliferation * (1 - net_effect * 0.58)", "computed model", "Lower proliferation means the modeled affected population divides less."),
-        _metric("Apoptosis/death response", req.apoptosis, apoptosis, "apoptosis + remaining_apoptosis * net_effect * 0.42", "computed model", "Higher apoptosis/death response means more affected cells are removed in the model."),
-        _metric("Repair/homeostasis", req.repair_capacity, repair, "repair + remaining_repair * intervention_modifier - toxicity", "computed model", "Repair/homeostasis can improve for restoration interventions and fall with off-target cost."),
-        _metric("Inflammatory signaling", req.inflammation, inflammation, "inflammation * (1 - net_effect * 0.30) + toxicity_drag * 0.22", "computed model", "Inflammation decreases with effective intervention but can rise with biological cost."),
-        _metric("Stress response", req.stress_response, stress_response, "stress * (1 - net_effect * 0.24) + toxicity_drag * 0.30", "computed model", "Stress response tracks intervention benefit and off-target burden."),
-        _metric("Immune clearance", req.immune_clearance, immune, "immune + remaining_immune * net_effect * type_modifier - toxicity", "computed model", "Immune clearance changes based on intervention type and cost."),
-        _metric("Clone fitness", req.clone_fitness, clone_fitness, "clone_fitness * (1 - net_effect * 0.36) + resistance_drag * 0.28", "computed model", "Resistance pressure can preserve or increase relative clone fitness."),
-        _metric("Affected population fraction", req.baseline_mutated_fraction, affected_fraction, "baseline_fraction * (1 - net_effect * 1.20) + resistance_drag * 0.12", "computed model", "Affected fraction is the modeled disease-like population burden."),
-        _metric("Tissue/ecosystem risk", req.baseline_ecosystem_risk, ecosystem_risk, "ecosystem_risk * (1 - net_effect * 0.75) + toxicity/resistance", "computed model", "Ecosystem risk combines affected population, inflammation, immune state, and biological tradeoffs."),
-        _metric("Off-target biological cost", 0.0, off_target_cost, "toxicity_cost * (1 - specificity) adjusted by severity", "simulator assumption", "Off-target cost rises with toxicity and low selectivity."),
-        _metric("Uncertainty", 0.5, uncertainty, "base uncertainty adjusted by missing evidence, specificity, and resistance", "computed model", "Uncertainty remains high when evidence is missing or failure modes are strong."),
+        _metric("target_activity", "Target activity", req.pathway_activity, target_activity, "pathway_activity * (1 - net_effect * 0.55)", provenance, f"{req.target} activity is reduced according to exposure, specificity, tissue penetration, and timing."),
+        _metric("pathway_disruption", "Pathway disruption", req.pathway_disruption, pathway_disruption, "pathway_disruption * (1 - net_effect * 0.48) + toxicity_drag * 0.12", provenance, "Pathway disruption falls when target modulation works, but biological cost can add residual disruption."),
+        _metric("proliferation", "Proliferation", req.proliferation, proliferation, "proliferation * (1 - net_effect * 0.58)", "computed model", "Lower proliferation means the modeled affected population divides less."),
+        _metric("apoptosis_death_response", "Apoptosis/death response", req.apoptosis, apoptosis, "apoptosis + remaining_apoptosis * net_effect * 0.42", "computed model", "Higher apoptosis/death response means more affected cells are removed in the model."),
+        _metric("repair_homeostasis", "Repair/homeostasis", req.repair_capacity, repair, "repair + remaining_repair * intervention_modifier - toxicity", "computed model", "Repair/homeostasis can improve for restoration interventions and fall with off-target cost."),
+        _metric("inflammatory_signaling", "Inflammatory signaling", req.inflammation, inflammation, "inflammation * (1 - net_effect * 0.30) + toxicity_drag * 0.22", "computed model", "Inflammation decreases with effective intervention but can rise with biological cost."),
+        _metric("stress_response", "Stress response", req.stress_response, stress_response, "stress * (1 - net_effect * 0.24) + toxicity_drag * 0.30", "computed model", "Stress response tracks intervention benefit and off-target burden."),
+        _metric("immune_clearance", "Immune clearance", req.immune_clearance, immune, "immune + remaining_immune * net_effect * type_modifier - toxicity", "computed model", "Immune clearance changes based on intervention type and cost."),
+        _metric("clone_fitness", "Clone fitness", req.clone_fitness, clone_fitness, "clone_fitness * (1 - net_effect * 0.36) + resistance_drag * 0.28", "computed model", "Resistance pressure can preserve or increase relative clone fitness."),
+        _metric("affected_population_fraction", "Affected population fraction", req.baseline_mutated_fraction, affected_fraction, "baseline_fraction * (1 - net_effect * 1.20) + resistance_drag * 0.12", "computed model", "Affected fraction is the modeled disease-like population burden."),
+        _metric("tissue_ecosystem_risk", "Tissue/ecosystem risk", req.baseline_ecosystem_risk, ecosystem_risk, "ecosystem_risk * (1 - net_effect * 0.75) + toxicity/resistance", "computed model", "Ecosystem risk combines affected population, inflammation, immune state, and biological tradeoffs."),
+        _metric("off_target_biological_cost", "Off-target biological cost", 0.0, off_target_cost, "toxicity_cost * (1 - specificity) adjusted by severity", "simulator assumption", "Off-target cost rises with toxicity and low selectivity."),
+        _metric("uncertainty", "Uncertainty", 0.5, uncertainty, "base uncertainty adjusted by missing evidence, specificity, and resistance", "computed model", "Uncertainty remains high when evidence is missing or failure modes are strong."),
     ]
 
     mechanism_graph = {

@@ -17,7 +17,15 @@ def run_simulation(req: SimulationRequest) -> SimulationResult:
         disease_name = kb["diseases"][req.disease]["label"]
 
     discovery, mutation, protein, pathway, evidence, external_available, notice = run_searchable_pipeline(
-        kb, disease_id, disease_name, req.gene, req.mutation, req.use_external_evidence, req.pathway_id, req.pathway_name,
+        kb,
+        disease_id,
+        disease_name,
+        req.gene,
+        req.mutation,
+        req.use_external_evidence,
+        req.pathway_id,
+        req.pathway_name,
+        req.protein_accession,
     )
     gene_symbol = req.gene
     selected = next((candidate for candidate in discovery.candidates if candidate.symbol == gene_symbol), None)
@@ -29,17 +37,20 @@ def run_simulation(req: SimulationRequest) -> SimulationResult:
     ecosystem = simulate_ecosystem(cell, population, req)
     alphafold = evidence.protein.get("alphafold", {}) if evidence else {}
     clinvar_ids = evidence.variant.get("clinvar_ids", []) if evidence else []
-    source_status = {
-        "Open Targets": "available" if "Open Targets" in evidence.sources else "missing/unavailable",
-        "ClinVar": "available" if mutation.external_evidence_available else "missing/unavailable",
-        "UniProt": "available" if protein.external_evidence_available else "missing/unavailable",
-        "Reactome": "available" if pathway.external_evidence_available else "missing/unavailable",
-        "AlphaFold DB": "available" if alphafold.get("alphafold_available") else "missing/unavailable",
+    source_status = evidence.source_status or {
+        "Open Targets": "available" if "Open Targets" in evidence.sources else "checked_not_found",
+        "ClinVar": "available" if mutation.external_evidence_available else "checked_not_found",
+        "UniProt": "available" if protein.external_evidence_available else "checked_not_found",
+        "Reactome": "available" if pathway.external_evidence_available else "checked_not_found",
+        "AlphaFold DB": "available" if alphafold.get("alphafold_available") else "checked_not_found",
     }
     simulation_input = SimulationInputSummary(
         disease_name=disease_name, disease_id=disease_id, gene_symbol=gene_symbol,
+        resolved_gene_symbol=evidence.gene.get("resolved_gene_symbol") if evidence else gene_symbol,
         gene_id=evidence.gene.get("ensembl_id") if evidence else None,
+        ensembl_id=evidence.gene.get("ensembl_id") if evidence else None,
         uniprot_accession=protein.protein_id,
+        resolution_source=evidence.protein.get("resolution_source") if evidence else None,
         protein_name=protein.protein_name,
         mutation=mutation.mutation,
         hgvs_notation=mutation.mutation,
@@ -48,9 +59,14 @@ def run_simulation(req: SimulationRequest) -> SimulationResult:
         protein_accession=protein.protein_id,
         alphafold_available=bool(alphafold.get("alphafold_available")),
         alphafold_confidence_label=alphafold.get("confidence_label"),
+        structure_source=evidence.protein.get("structure_source") if evidence else alphafold.get("structure_source"),
+        structure_source_label=evidence.protein.get("structure_source_label") if evidence else alphafold.get("structure_source_label"),
+        structure_status_reason=evidence.protein.get("structure_status_reason") if evidence else alphafold.get("structure_status_reason"),
         pathway_name=pathway.selected_pathway_name or pathway.label,
         pathway_id=pathway.selected_pathway_id or pathway.pathway_id, pathway_source=pathway.selected_pathway_source,
         data_source_status=source_status,
+        source_status=source_status,
+        source_audit=evidence.source_audit if evidence else [],
     )
     result = SimulationResult(
         request=req, simulation_input=simulation_input, disease_discovery=discovery, selected_candidate=selected,

@@ -1,21 +1,28 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional
 
 import requests
 
 from app.adapters.cache import get_cached, set_cached
+from app.adapters.hgnc import safe_fetch_gene_identity
 from app.adapters.normalizer import get_uniprot_accession, normalize_gene_symbol
 
 BASE_URL = "https://rest.uniprot.org/uniprotkb"
 TIMEOUT_SECONDS = 25
 SOURCE_NAME = "UniProt"
+UNIPROT_ACCESSION_RE = re.compile(r"^(?:[A-Z][0-9][A-Z0-9]{3}[0-9]|[A-Z0-9]{10})$", re.IGNORECASE)
 
 
 def _fetch_json(url: str) -> Dict[str, Any]:
     response = requests.get(url, timeout=TIMEOUT_SECONDS, headers={"Accept": "application/json"})
     response.raise_for_status()
     return response.json()
+
+
+def looks_like_uniprot_accession(value: str | None) -> bool:
+    return bool(value and UNIPROT_ACCESSION_RE.match(value.strip()))
 
 
 def _extract_protein_name(entry: Dict[str, Any]) -> str:
@@ -111,6 +118,77 @@ def search_genes_uniprot(query: str, limit: int = 10) -> Dict[str, Any]:
     return result
 
 
+def resolve_uniprot_accession(
+    gene_symbol: str,
+    local_kb: Optional[Dict[str, Any]] = None,
+    requested_accession: Optional[str] = None,
+) -> Dict[str, Any]:
+    symbol = normalize_gene_symbol(gene_symbol)
+    requested = (requested_accession or "").strip()
+    if looks_like_uniprot_accession(requested):
+        return {
+            "accession": requested.upper(),
+            "symbol": symbol,
+            "resolution_source": "typed_protein_accession",
+            "available": True,
+            "error": None,
+        }
+
+    hgnc = safe_fetch_gene_identity(symbol)
+    if hgnc.get("available"):
+        hgnc_symbol = normalize_gene_symbol(hgnc.get("symbol") or symbol)
+        hgnc_accessions = [item for item in hgnc.get("uniprot_ids", []) if looks_like_uniprot_accession(str(item))]
+        if hgnc_accessions:
+            return {
+                "accession": str(hgnc_accessions[0]).upper(),
+                "symbol": hgnc_symbol,
+                "protein_name": hgnc.get("name"),
+                "hgnc_id": hgnc.get("hgnc_id"),
+                "ensembl_id": hgnc.get("ensembl_id"),
+                "resolution_source": "hgnc_uniprot_mapping",
+                "available": True,
+                "error": None,
+            }
+        symbol = hgnc_symbol
+
+    search_error = None
+    try:
+        search = search_genes_uniprot(symbol, limit=5)
+        exact = next((row for row in search.get("results", []) if row.get("symbol") == symbol and row.get("accession")), None)
+        row = exact or next((row for row in search.get("results", []) if row.get("accession")), None)
+        if row:
+            return {
+                "accession": row.get("accession"),
+                "symbol": row.get("symbol") or symbol,
+                "protein_name": row.get("protein_name"),
+                "resolution_source": "uniprot_gene_search",
+                "available": True,
+                "error": None,
+            }
+    except Exception as exc:  # noqa: BLE001
+        search_error = str(exc)
+
+    mapped = get_uniprot_accession(symbol, local_kb)
+    if mapped:
+        return {
+            "accession": mapped,
+            "symbol": symbol,
+            "resolution_source": "local_uniprot_map",
+            "available": True,
+            "hgnc_id": hgnc.get("hgnc_id") if hgnc.get("available") else None,
+            "ensembl_id": hgnc.get("ensembl_id") if hgnc.get("available") else None,
+            "error": search_error,
+        }
+
+    return {
+        "accession": None,
+        "symbol": symbol,
+        "resolution_source": "input_unresolved",
+        "available": False,
+        "error": search_error or f"No UniProt accession could be resolved for {symbol}",
+    }
+
+
 def safe_search_genes_uniprot(query: str, limit: int = 10) -> Dict[str, Any]:
     if not query.strip():
         return {"source": SOURCE_NAME, "available": False, "query": query, "results": [], "error": "Empty query"}
@@ -129,10 +207,12 @@ def fetch_protein_evidence(
     gene_symbol: str,
     local_kb: Optional[Dict[str, Any]] = None,
     mutation_position: Optional[int] = None,
+    requested_accession: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Return normalized UniProt protein evidence."""
     symbol = normalize_gene_symbol(gene_symbol)
-    accession = get_uniprot_accession(symbol, local_kb)
+    resolution = resolve_uniprot_accession(symbol, local_kb, requested_accession)
+    accession = resolution.get("accession")
     cache_key = f"uniprot:protein:{accession}:{mutation_position}"
     cached = get_cached(cache_key)
     if cached is not None:
@@ -144,7 +224,8 @@ def fetch_protein_evidence(
             "available": False,
             "gene_symbol": symbol,
             "accession": None,
-            "error": f"No UniProt accession mapping for {symbol}",
+            "resolution_source": resolution.get("resolution_source", "input_unresolved"),
+            "error": resolution.get("error") or f"No UniProt accession mapping for {symbol}",
         }
 
     entry = _fetch_json(f"{BASE_URL}/{accession}.json")
@@ -158,6 +239,9 @@ def fetch_protein_evidence(
         "gene_symbol": symbol,
         "gene_name": gene_name,
         "accession": accession,
+        "resolution_source": resolution.get("resolution_source", "uniprot_gene_search"),
+        "hgnc_id": resolution.get("hgnc_id"),
+        "ensembl_id": resolution.get("ensembl_id"),
         "protein_name": _extract_protein_name(entry),
         "function_summary": _extract_function(entry),
         "function_raw": _extract_function(entry),
@@ -177,17 +261,20 @@ def safe_fetch_protein_evidence(
     gene_symbol: str,
     local_kb: Optional[Dict[str, Any]] = None,
     mutation_position: Optional[int] = None,
+    requested_accession: Optional[str] = None,
 ) -> Dict[str, Any]:
     try:
-        return fetch_protein_evidence(gene_symbol, local_kb, mutation_position)
+        return fetch_protein_evidence(gene_symbol, local_kb, mutation_position, requested_accession)
     except Exception as exc:  # noqa: BLE001
         symbol = normalize_gene_symbol(gene_symbol)
-        accession = get_uniprot_accession(symbol, local_kb)
+        resolution = resolve_uniprot_accession(symbol, local_kb, requested_accession)
+        accession = resolution.get("accession") or get_uniprot_accession(symbol, local_kb)
         return {
             "source": SOURCE_NAME,
             "available": False,
             "gene_symbol": symbol,
             "accession": accession,
+            "resolution_source": resolution.get("resolution_source", "input_unresolved"),
             "protein_name": None,
             "function_summary": None,
             "domains": [],

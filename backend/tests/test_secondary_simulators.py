@@ -181,6 +181,35 @@ def test_intervention_unknown_drug_does_not_crash_and_marks_missing_evidence():
     assert payload["modified_biology"]["ecosystem_risk"] >= 0
 
 
+def test_intervention_semantic_effects_are_not_raw_direction_colors():
+    response = client.post("/api/intervention/simulate", json={
+        "disease": "cancer",
+        "gene": "TP53",
+        "mutation": "p.R175H",
+        "intervention_type": "Drug",
+        "drug_name": "test compound",
+        "target": "TP53",
+        "strength": 0.9,
+        "specificity": 0.9,
+        "tissue_penetration": 0.9,
+        "baseline_mutated_fraction": 0.45,
+        "baseline_ecosystem_risk": 0.7,
+        "proliferation": 0.8,
+        "apoptosis": 0.2,
+        "repair_capacity": 0.35,
+        "immune_clearance": 0.35,
+        "inflammation": 0.65,
+        "pathway_disruption": 0.75,
+        "clone_fitness": 0.72,
+    })
+    assert response.status_code == 200, response.text
+    metrics = {metric["label"]: metric for metric in response.json()["before_after_metrics"]}
+    assert metrics["Proliferation"]["direction"] == "decreased"
+    assert metrics["Proliferation"]["semantic_effect"] == "beneficial"
+    assert metrics["Apoptosis/death response"]["direction"] == "increased"
+    assert metrics["Apoptosis/death response"]["semantic_effect"] == "beneficial"
+
+
 def test_digital_twin_uses_profile_and_shared_baseline():
     response = client.post("/api/digital-twin", json={
         "disease": "melanoma", "gene": "BRAF", "mutation": "p.V600E", "protein": "B-Raf",

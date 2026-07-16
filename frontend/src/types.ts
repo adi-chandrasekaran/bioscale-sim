@@ -49,6 +49,8 @@ export type SimulationRequest = {
   disease_name?: string;
   gene: string;
   mutation: string;
+  protein_accession?: string;
+  protein_name?: string;
   pathway_id?: string;
   pathway_name?: string;
   steps: number;
@@ -66,8 +68,13 @@ export type CandidateGene = {
   pathways: string[];
   interactions: string[];
   source: string;
+  gene_name?: string;
+  protein_name?: string;
   summary?: string;
   function_summary?: string;
+  disease_association_summary?: string;
+  function_source?: string;
+  function_status_reason?: string;
   provenance: Record<string, ProvenanceEntry>;
 };
 
@@ -104,14 +111,18 @@ export type NormalizedEvidence = {
   external_evidence_available: boolean;
   evidence_notice?: string;
   raw: Record<string, unknown>;
+  source_audit?: Array<Record<string, unknown>>;
 };
 
 export type SimulationInputSummary = {
   disease_name: string;
   disease_id: string;
   gene_symbol: string;
+  resolved_gene_symbol?: string;
   gene_id?: string;
+  ensembl_id?: string;
   uniprot_accession?: string;
+  resolution_source?: string;
   protein_name?: string;
   mutation: string;
   hgvs_notation?: string;
@@ -120,10 +131,15 @@ export type SimulationInputSummary = {
   protein_accession?: string;
   alphafold_available?: boolean;
   alphafold_confidence_label?: string;
+  structure_source?: "alphafold" | "rcsb_pdb" | "pdbe" | "uniprot_feature_map" | "none_found";
+  structure_source_label?: string;
+  structure_status_reason?: string;
   pathway_name?: string;
   pathway_id?: string;
   pathway_source?: string;
   data_source_status?: Record<string, string>;
+  source_status?: Record<string, string>;
+  source_audit?: Array<Record<string, unknown>>;
 };
 
 export type SimulationResult = {
@@ -446,12 +462,18 @@ export type InterventionResult = {
   }>;
   clone_response: Array<{ clone: string; suppression: number; fitness_after?: number }>;
   before_after_metrics?: Array<{
+    metric_id?: string;
     label: string;
     before: number;
     after: number;
     delta: number;
     direction: "increased" | "decreased" | "unchanged";
     magnitude: number;
+    semantic_effect?: "beneficial" | "harmful" | "neutral";
+    semantic_explanation?: string;
+    semantic_confidence?: number;
+    desirability_direction?: "lower_is_beneficial" | "higher_is_beneficial" | "context_dependent" | "no_material_change";
+    evidence_basis?: string;
     formula_rule: string;
     provenance: string;
     explanation: string;

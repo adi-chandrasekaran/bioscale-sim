@@ -67,6 +67,8 @@ class SimulationRequest(BaseModel):
     disease_name: Optional[str] = Field(default="cancer", description="Human-readable disease label")
     gene: str = Field(default="TP53", description="Gene symbol")
     mutation: str = Field(default="p.R175H", description="Variant notation")
+    protein_accession: Optional[str] = Field(default=None, description="Optional UniProt accession selected by the user")
+    protein_name: Optional[str] = Field(default=None, description="Optional protein label selected by the user")
     pathway_id: Optional[str] = Field(default=None, description="Optional Reactome pathway stId")
     pathway_name: Optional[str] = Field(default=None, description="Optional Reactome pathway label")
     steps: int = Field(default=60, ge=5, le=300)
@@ -87,8 +89,13 @@ class CandidateGene(BaseModel):
     pathways: List[str] = Field(default_factory=list)
     interactions: List[str] = Field(default_factory=list)
     source: str = "Open Targets"
+    gene_name: Optional[str] = None
+    protein_name: Optional[str] = None
     summary: Optional[str] = None
     function_summary: Optional[str] = None
+    disease_association_summary: Optional[str] = None
+    function_source: Optional[str] = None
+    function_status_reason: Optional[str] = None
     provenance: Dict[str, ProvenanceEntry] = Field(default_factory=dict)
 
 
@@ -260,8 +267,11 @@ class SimulationInputSummary(BaseModel):
     disease_name: str
     disease_id: str
     gene_symbol: str
+    resolved_gene_symbol: Optional[str] = None
     gene_id: Optional[str] = None
+    ensembl_id: Optional[str] = None
     uniprot_accession: Optional[str] = None
+    resolution_source: Optional[str] = None
     protein_name: Optional[str] = None
     mutation: str
     hgvs_notation: Optional[str] = None
@@ -270,10 +280,15 @@ class SimulationInputSummary(BaseModel):
     protein_accession: Optional[str] = None
     alphafold_available: bool = False
     alphafold_confidence_label: Optional[str] = None
+    structure_source: Optional[str] = None
+    structure_source_label: Optional[str] = None
+    structure_status_reason: Optional[str] = None
     pathway_name: Optional[str] = None
     pathway_id: Optional[str] = None
     pathway_source: Optional[str] = None
     data_source_status: Dict[str, str] = Field(default_factory=dict)
+    source_status: Dict[str, str] = Field(default_factory=dict)
+    source_audit: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class NormalizedEvidence(BaseModel):
@@ -286,6 +301,8 @@ class NormalizedEvidence(BaseModel):
     summaries: Dict[str, str] = Field(default_factory=dict)
     external_evidence_available: bool = False
     evidence_notice: Optional[str] = None
+    source_status: Dict[str, str] = Field(default_factory=dict)
+    source_audit: List[Dict[str, Any]] = Field(default_factory=list)
     raw: Dict[str, Any] = Field(default_factory=dict)
 
 

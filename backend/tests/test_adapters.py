@@ -6,9 +6,10 @@ from app.adapters.clinvar import safe_fetch_variant_evidence, safe_search_varian
 from app.adapters.normalizer import parse_hgvs_protein
 from app.adapters.open_targets import safe_fetch_disease_targets, safe_search_diseases
 from app.adapters.reactome import safe_fetch_pathway_evidence
-from app.adapters.summarizer import summarize_protein_function
-from app.adapters.uniprot import safe_fetch_protein_evidence
+from app.adapters.summarizer import known_gene_function, summarize_protein_function
+from app.adapters.uniprot import resolve_uniprot_accession, safe_fetch_protein_evidence
 from app.adapters.alphafold import get_structure_urls, safe_get_structure_status
+from app.services.disease_discovery import discover_candidate_genes
 
 
 OPEN_TARGETS_SEARCH = {
@@ -152,6 +153,60 @@ def test_uniprot_adapter_and_summarizer(mock_set_cache, mock_get_cache, mock_fet
     summary = summarize_protein_function(result["function_raw"], result["protein_name"])
     assert len(summary) < 500
     assert "PubMed" not in summary
+
+
+@patch("app.adapters.uniprot.search_genes_uniprot")
+def test_uniprot_resolver_uses_live_gene_search_before_local_fallback(mock_search):
+    mock_search.return_value = {
+        "available": True,
+        "results": [
+            {
+                "symbol": "KRAS",
+                "accession": "P01116",
+                "protein_name": "GTPase KRas",
+            }
+        ],
+    }
+
+    result = resolve_uniprot_accession("KRAS", local_kb={})
+
+    assert result["accession"] == "P01116"
+    assert result["resolution_source"] == "uniprot_gene_search"
+
+
+def test_uniprot_resolver_accepts_typed_accession():
+    result = resolve_uniprot_accession("TP53", requested_accession="p04637")
+
+    assert result["accession"] == "P04637"
+    assert result["resolution_source"] == "typed_protein_accession"
+
+
+def test_curated_gene_functions_cover_common_candidate_genes_without_demo_placeholder():
+    for symbol in ["MET", "MSH6", "RET", "RB1", "KRAS", "EGFR", "BRCA1", "BRCA2"]:
+        summary = known_gene_function(symbol)
+        assert summary
+        assert "local demo" not in summary.lower()
+
+
+def test_local_candidate_discovery_uses_gene_function_for_generated_candidates():
+    kb = {
+        "diseases": {
+            "selected_disease": {
+                "label": "cancer",
+                "affected_cell_context": "tumor context",
+                "known_genes": ["MSH2", "RET"],
+                "candidate_gene_weights": {"MSH2": 0.93, "RET": 0.93},
+            }
+        },
+        "genes": {},
+    }
+
+    result = discover_candidate_genes(kb, "selected_disease")
+
+    summaries = {candidate.symbol: candidate.function_summary for candidate in result.candidates}
+    assert "mismatch repair" in summaries["MSH2"].lower()
+    assert "receptor tyrosine kinase" in summaries["RET"].lower()
+    assert all("local demo" not in (summary or "").lower() for summary in summaries.values())
 
 
 @patch("app.adapters.reactome._fetch_json")

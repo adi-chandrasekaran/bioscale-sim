@@ -9,6 +9,7 @@ from app.adapters.cache import get_cached, set_cached
 SOURCE_NAME = "AlphaFold DB"
 API_BASE = "https://alphafold.ebi.ac.uk/api/prediction"
 FILES_BASE = "https://alphafold.ebi.ac.uk/files"
+RCSB_FILES_BASE = "https://files.rcsb.org/download"
 TIMEOUT_SECONDS = 20
 
 
@@ -230,10 +231,30 @@ def get_structure_status(uniprot_accession: str, position: Optional[int] = None)
         "confidence_label": "unavailable",
         "notes": "Missing UniProt accession.",
     }
+    structure_source = "alphafold" if bool(metadata.get("available") or pdb_available) else (
+        "rcsb_pdb" if _uniprot_pdb_crossrefs(accession) else (
+            "uniprot_feature_map" if _uniprot_feature_model(accession, position).get("features") else "none_found"
+        )
+    )
+    structure_source_label = "AlphaFold DB" if structure_source == "alphafold" else (
+        "RCSB PDB" if structure_source == "rcsb_pdb" else (
+            "UniProt feature map" if structure_source == "uniprot_feature_map" else "No public structure record found after checks"
+        )
+    )
     return {
         "source": SOURCE_NAME,
         "uniprot_accession": accession or "unknown",
         "alphafold_available": bool(metadata.get("available") or pdb_available),
+        "structure_source": structure_source,
+        "structure_source_label": structure_source_label,
+        "structure_status_reason": (
+            "AlphaFold DB returned a predicted structure for the resolved UniProt accession."
+            if structure_source == "alphafold"
+            else "AlphaFold DB had no public model, so a secondary structure/context source was selected."
+            if structure_source in {"rcsb_pdb", "uniprot_feature_map"}
+            else "No public structure record was found after AlphaFold, PDB, and UniProt feature checks."
+        ),
+        "structure_view_model": _uniprot_feature_model(accession, position),
         **urls,
         **residue,
         "error": metadata.get("error") if not pdb_available else None,
@@ -280,6 +301,76 @@ def _safe_uniprot_domain_hit(uniprot_accession: str, position: Optional[int]) ->
     return None
 
 
+def _safe_uniprot_entry(uniprot_accession: str) -> Dict[str, Any]:
+    accession = (uniprot_accession or "").strip()
+    if not accession:
+        return {}
+    cache_key = f"uniprot:structure-context:{accession}"
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return cached
+    response = requests.get(f"https://rest.uniprot.org/uniprotkb/{accession}.json", timeout=TIMEOUT_SECONDS)
+    response.raise_for_status()
+    payload = response.json()
+    set_cached(cache_key, payload)
+    return payload
+
+
+def _uniprot_pdb_crossrefs(uniprot_accession: str) -> list[Dict[str, Any]]:
+    try:
+        entry = _safe_uniprot_entry(uniprot_accession)
+    except Exception:
+        return []
+    refs = []
+    for ref in entry.get("uniProtKBCrossReferences", []):
+        if ref.get("database") != "PDB" or not ref.get("id"):
+            continue
+        properties = {item.get("key"): item.get("value") for item in ref.get("properties", []) if item.get("key")}
+        refs.append(
+            {
+                "id": ref.get("id"),
+                "method": properties.get("Method"),
+                "resolution": properties.get("Resolution"),
+                "chains": properties.get("Chains"),
+                "source": "RCSB PDB",
+            }
+        )
+    return refs
+
+
+def _uniprot_feature_model(uniprot_accession: str, position: Optional[int]) -> Dict[str, Any]:
+    try:
+        entry = _safe_uniprot_entry(uniprot_accession)
+    except Exception as exc:  # noqa: BLE001
+        return {"features": [], "sequence_length": None, "position": position, "error": str(exc)}
+    sequence_length = entry.get("sequence", {}).get("length")
+    features = []
+    for feature in entry.get("features", []):
+        start = feature.get("location", {}).get("start", {}).get("value")
+        end = feature.get("location", {}).get("end", {}).get("value")
+        if not isinstance(start, int) or not isinstance(end, int):
+            continue
+        feature_type = feature.get("type") or "feature"
+        if feature_type not in {"Domain", "Region", "DNA binding", "Zinc finger", "Motif", "Site", "Binding site", "Active site"}:
+            continue
+        features.append(
+            {
+                "type": feature_type,
+                "description": feature.get("description") or feature_type,
+                "start": start,
+                "end": end,
+                "contains_position": bool(position and start <= position <= end),
+            }
+        )
+    return {
+        "features": features[:30],
+        "sequence_length": sequence_length,
+        "position": position,
+        "source": "UniProt feature map",
+        "error": None,
+    }
+
+
 def build_alphafold_summary(uniprot_accession: str, position: Optional[int] = None, mutation: Optional[str] = None) -> Dict[str, Any]:
     status = safe_get_structure_status(uniprot_accession, position=position)
     accession = status.get("uniprot_accession") or (uniprot_accession or "unknown")
@@ -294,6 +385,9 @@ def build_alphafold_summary(uniprot_accession: str, position: Optional[int] = No
     except Exception:
         domain_hit = None
     if available:
+        structure_source = "alphafold"
+        structure_source_label = "AlphaFold DB"
+        structure_status_reason = "AlphaFold DB returned a predicted structure for the resolved UniProt accession."
         position_text = f" at residue {position}" if position else ""
         summary = (
             f"AlphaFold DB has a predicted structure for {accession}{position_text}. "
@@ -308,12 +402,48 @@ def build_alphafold_summary(uniprot_accession: str, position: Optional[int] = No
         )
         message = "Structure links are available from AlphaFold DB."
     else:
-        summary = f"AlphaFold DB did not return a predicted structure for {accession}."
-        message = status.get("error") or "No AlphaFold prediction was found for this accession."
+        pdb_refs = _uniprot_pdb_crossrefs(accession)
+        feature_model = _uniprot_feature_model(accession, position)
+        if pdb_refs:
+            structure_source = "rcsb_pdb"
+            structure_source_label = "RCSB PDB"
+            structure_status_reason = "AlphaFold DB had no public model, so UniProt PDB cross-references were used."
+            primary_pdb = pdb_refs[0]["id"]
+            status["pdb_url"] = f"{RCSB_FILES_BASE}/{primary_pdb}.pdb"
+            status["mmcif_url"] = f"{RCSB_FILES_BASE}/{primary_pdb}.cif"
+            summary = (
+                f"AlphaFold DB did not return a predicted structure for {accession}. "
+                f"RCSB PDB has an experimental structure mapping via UniProt cross-reference {primary_pdb}."
+            )
+            message = f"Using RCSB PDB structure {primary_pdb} as the structural source."
+        elif feature_model.get("features"):
+            structure_source = "uniprot_feature_map"
+            structure_source_label = "UniProt feature map"
+            structure_status_reason = "No public 3D model was found, so UniProt sequence features and domains were used."
+            summary = (
+                f"No AlphaFold or PDB structure was found for {accession}. "
+                "UniProt protein features are shown as the structural context."
+            )
+            message = "Using UniProt feature/domain map because no public 3D structure record was found."
+        else:
+            structure_source = "none_found"
+            structure_source_label = "No public structure record found after checks"
+            structure_status_reason = "AlphaFold DB, UniProt PDB cross-references, and UniProt feature records did not provide structural context."
+            summary = f"No public structure or feature record was found for {accession} after AlphaFold, PDB, and UniProt feature checks."
+            message = status.get("error") or "No public structure record was found for this accession."
+        if "pdb_refs" not in locals():
+            pdb_refs = []
+        if "feature_model" not in locals():
+            feature_model = _uniprot_feature_model(accession, position)
     return {
         "source": SOURCE_NAME,
         "uniprot_accession": accession,
         "alphafold_available": available,
+        "structure_source": structure_source,
+        "structure_source_label": structure_source_label,
+        "structure_status_reason": structure_status_reason,
+        "structure_view_model": feature_model if "feature_model" in locals() else _uniprot_feature_model(accession, position),
+        "pdb_crossrefs": pdb_refs if "pdb_refs" in locals() else [],
         "pdb_url": status.get("pdb_url") or "",
         "cif_url": status.get("mmcif_url") or status.get("cif_url") or "",
         "mmcif_url": status.get("mmcif_url") or status.get("cif_url") or "",

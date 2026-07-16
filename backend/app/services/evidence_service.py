@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.adapters.clinvar import safe_fetch_variant_evidence
+from app.adapters.cancer_variants import safe_fetch_cancer_variant_context
 from app.adapters.alphafold import safe_get_structure_status
-from app.adapters.open_targets import safe_fetch_disease_targets_by_id
+from app.adapters.hgnc import safe_fetch_gene_identity
+from app.adapters.open_targets import safe_fetch_disease_targets_by_id, safe_search_genes
 from app.adapters.reactome import safe_fetch_pathway_evidence
 from app.adapters.uniprot import safe_fetch_protein_evidence
 from app.adapters.normalizer import (
@@ -17,6 +19,8 @@ from app.adapters.normalizer import (
 )
 from app.adapters.summarizer import (
     build_card_summaries,
+    is_placeholder_definition,
+    known_gene_function,
     limit_sentences,
     summarize_gene_association,
     summarize_mutation,
@@ -55,6 +59,31 @@ def _prov(category: str, source: str, detail: Optional[str] = None) -> Provenanc
     return ProvenanceEntry(category=category, source=source, detail=detail)
 
 
+def _source_status(payload: Dict[str, Any], available_key: str = "available") -> str:
+    if payload.get(available_key):
+        return "available"
+    error = str(payload.get("error") or payload.get("error_message") or "")
+    if "No UniProt accession" in error or "could be resolved" in error or payload.get("resolution_source") == "input_unresolved":
+        return "input_unresolved"
+    if "404" in error or "not found" in error.lower() or "No AlphaFold prediction" in error:
+        return "checked_not_found"
+    if error:
+        return "api_unreachable"
+    return "checked_not_found"
+
+
+def _audit(source_name: str, payload: Dict[str, Any], evidence_type: str, queried: Any = None, resolved: Any = None, available_key: str = "available") -> Dict[str, Any]:
+    status = _source_status(payload, available_key)
+    return {
+        "source_name": source_name,
+        "status": status,
+        "reason": payload.get("error") or payload.get("error_message") or payload.get("notes") or ("record found" if status == "available" else "checked source and no matching public record was found"),
+        "queried_identifier": queried,
+        "resolved_identifier": resolved,
+        "evidence_type": evidence_type,
+    }
+
+
 def _build_local_fallback_pipeline(
     local_kb: Dict[str, Any],
     disease_id: str,
@@ -91,6 +120,14 @@ def _build_local_fallback_pipeline(
         summaries={},
         external_evidence_available=False,
         evidence_notice=EVIDENCE_UNAVAILABLE_MSG,
+        source_status={
+            "Open Targets": "model_inferred_from_source",
+            "ClinVar": "model_inferred_from_source",
+            "UniProt": "model_inferred_from_source",
+            "Reactome": "model_inferred_from_source",
+            "AlphaFold DB": "input_unresolved",
+        },
+        source_audit=[],
     )
 
     discovery = discover_candidate_genes(kb, disease_key)
@@ -113,6 +150,7 @@ def fetch_normalized_evidence(
     local_kb: Dict[str, Any],
     pathway_id: Optional[str] = None,
     pathway_name: Optional[str] = None,
+    protein_accession: Optional[str] = None,
 ) -> NormalizedEvidence:
     symbol = normalize_gene_symbol(gene_symbol)
     parsed = parse_hgvs_protein(mutation_notation)
@@ -120,9 +158,30 @@ def fetch_normalized_evidence(
 
     open_targets = safe_fetch_disease_targets_by_id(disease_id, limit=10)
     clinvar = safe_fetch_variant_evidence(symbol, mutation_notation)
-    uniprot = safe_fetch_protein_evidence(symbol, local_kb, mutation_position=position)
+    cancer_variant = safe_fetch_cancer_variant_context(symbol, mutation_notation)
+    hgnc = safe_fetch_gene_identity(symbol)
+    uniprot = safe_fetch_protein_evidence(symbol, local_kb, mutation_position=position, requested_accession=protein_accession)
     alphafold = safe_get_structure_status(uniprot.get("accession") or "", position=position)
     reactome = safe_fetch_pathway_evidence(symbol, local_kb)
+    source_status = {
+        "Open Targets": _source_status(open_targets),
+        "ClinVar": _source_status(clinvar),
+        "UniProt": _source_status(uniprot),
+        "Reactome": _source_status(reactome),
+        "AlphaFold DB": "available" if alphafold.get("alphafold_available") else _source_status(alphafold, "alphafold_available"),
+    }
+    if not alphafold.get("alphafold_available") and alphafold.get("structure_source") in {"rcsb_pdb", "uniprot_feature_map"}:
+        source_status[alphafold.get("structure_source_label") or "Structure fallback"] = "procured_from_secondary_source"
+
+    source_audit = [
+        _audit("Open Targets", open_targets, "disease_gene_ranking", disease_id, open_targets.get("disease_id")),
+        _audit("ClinVar", clinvar, "variant_classification", f"{symbol} {mutation_notation}", clinvar.get("clinvar_ids")),
+        _audit("CIViC", cancer_variant, "cancer_variant_context", f"{symbol} {mutation_notation}", [r.get("id") for r in cancer_variant.get("records", [])]),
+        _audit("HGNC", hgnc, "gene_identity", symbol, hgnc.get("hgnc_id")),
+        _audit("UniProt", uniprot, "protein_function", symbol, uniprot.get("accession")),
+        _audit("Reactome", reactome, "pathway_context", symbol, [p.get("stId") for p in reactome.get("pathways", [])[:3]]),
+        _audit(alphafold.get("structure_source_label") or "AlphaFold DB", alphafold, "structure_context", uniprot.get("accession"), alphafold.get("uniprot_accession"), "alphafold_available"),
+    ]
 
     assoc_score = 0.0
     for row in open_targets.get("candidates", []):
@@ -164,9 +223,11 @@ def fetch_normalized_evidence(
         },
         "gene": {
             "symbol": symbol,
-            "name": next((c.get("name") for c in open_targets.get("candidates", []) if c.get("symbol") == symbol), symbol),
+            "resolved_gene_symbol": uniprot.get("gene_name") or symbol,
+            "name": next((c.get("name") for c in open_targets.get("candidates", []) if c.get("symbol") == symbol), None) or hgnc.get("name") or symbol,
             "association_score": assoc_score,
-            "ensembl_id": next((c.get("ensembl_id") for c in open_targets.get("candidates", []) if c.get("symbol") == symbol), None),
+            "ensembl_id": next((c.get("ensembl_id") for c in open_targets.get("candidates", []) if c.get("symbol") == symbol), None) or hgnc.get("ensembl_id") or uniprot.get("ensembl_id"),
+            "hgnc_id": hgnc.get("hgnc_id"),
             "summary": summarize_gene_fallback(symbol, disease_name),
         },
         "variant": {
@@ -178,16 +239,23 @@ def fetch_normalized_evidence(
             "rsid": clinvar.get("rsid"),
             "phenotypes": clinvar.get("phenotypes", []),
             "clinvar_available": clinvar.get("available", False),
+            "cancer_variant_context": cancer_variant.get("records", []),
+            "cancer_variant_available": cancer_variant.get("available", False),
             "summary": summarize_variant_fallback(symbol, mutation_notation, clinvar.get("variant_type") or infer_variant_type_from_notation(mutation_notation)),
         },
         "protein": {
             "name": uniprot.get("protein_name") or symbol,
             "accession": uniprot.get("accession"),
+            "resolution_source": uniprot.get("resolution_source"),
             "function_raw": uniprot.get("function_raw"),
             "function_summary": protein_summary or summarize_protein_fallback(uniprot.get("protein_name") or symbol, symbol),
             "domain_hit": uniprot.get("domain_hit"),
             "alphafold": alphafold,
             "alphafold_available": alphafold.get("alphafold_available", False),
+            "structure_source": alphafold.get("structure_source"),
+            "structure_source_label": alphafold.get("structure_source_label"),
+            "structure_status_reason": alphafold.get("structure_status_reason"),
+            "structure_view_model": alphafold.get("structure_view_model"),
             "alphafold_confidence_label": alphafold.get("confidence_label"),
             "sequence_length": uniprot.get("sequence_length"),
             "domains": uniprot.get("domains", []),
@@ -211,9 +279,13 @@ def fetch_normalized_evidence(
         summaries=summaries,
         external_evidence_available=any_available,
         evidence_notice=None if any_available else EVIDENCE_UNAVAILABLE_MSG,
+        source_status=source_status,
+        source_audit=source_audit,
         raw={
             "open_targets": open_targets,
             "clinvar": {k: v for k, v in clinvar.items() if k != "raw"},
+            "civic": cancer_variant,
+            "hgnc": hgnc,
             "alphafold": alphafold,
             "uniprot": {k: v for k, v in uniprot.items() if k != "raw_entry"},
             "reactome": reactome,
@@ -231,6 +303,71 @@ def _build_discovery(
     candidates: List[CandidateGene] = []
     local_candidates = {candidate.symbol: candidate for candidate in discovery.candidates}
 
+    def enrich_candidate(symbol: str, name: Optional[str], summary: str, local_candidate: Optional[CandidateGene]) -> Dict[str, Any]:
+        uni = safe_fetch_protein_evidence(symbol)
+        ot_target = safe_search_genes(symbol, limit=1)
+        hgnc_identity = safe_fetch_gene_identity(symbol)
+        function_summary = None
+        protein_name = None
+        function_source = None
+        status_reason = None
+        if uni.get("available"):
+            protein_name = uni.get("protein_name")
+            uni_summary = summarize_protein_function(uni.get("function_raw"), protein_name)
+            if uni.get("function_raw") and not is_placeholder_definition(uni_summary):
+                function_summary = uni_summary
+                function_source = "UniProt"
+                status_reason = f"Resolved {symbol} to UniProt accession {uni.get('accession')}."
+        if not function_summary and ot_target.get("available") and ot_target.get("results"):
+            target_description = ot_target["results"][0].get("description")
+            if target_description and not is_placeholder_definition(target_description):
+                function_summary = limit_sentences(target_description, 2)
+                function_source = "Open Targets target description"
+                status_reason = "UniProt function text was unavailable, so Open Targets target description was used."
+        if not function_summary and hgnc_identity.get("available"):
+            hgnc_summary = hgnc_identity.get("summary") or hgnc_identity.get("name")
+            if hgnc_summary and not is_placeholder_definition(hgnc_summary):
+                function_summary = limit_sentences(f"{symbol} is {hgnc_summary}.", 2)
+                function_source = "HGNC"
+                status_reason = "UniProt/Open Targets function text was unavailable, so HGNC gene identity was used."
+        if not function_summary:
+            known_function = known_gene_function(symbol)
+            local_text = (
+                local_candidate.function_summary
+                if local_candidate and local_candidate.function_summary
+                else ""
+            )
+            if is_placeholder_definition(local_text):
+                local_text = ""
+            if is_placeholder_definition(summary):
+                summary = ""
+            function_summary = (
+                known_function
+                if known_function
+                else local_text
+                if local_text
+                else summary
+            )
+            if not function_summary:
+                function_summary = f"{symbol} is included in the disease-gene ranking for {disease_name}, but no concise public gene-function summary was retrieved."
+            function_source = "Curated gene function" if known_function else "Open Targets association"
+            status_reason = "Used curated gene function text after public function lookups did not return a stronger description."
+        if is_placeholder_definition(function_summary):
+            known_function = known_gene_function(symbol)
+            function_summary = known_function or f"{symbol} is included in the disease-gene ranking for {disease_name}, but no concise public gene-function summary was retrieved."
+            function_source = "Curated gene function" if known_function else "Model-inferred gene context"
+            status_reason = "Removed placeholder text and used the strongest available gene-function fallback."
+        association = summarize_gene_association(symbol, name or symbol, 0.0, disease_name)
+        return {
+            "gene_name": name or hgnc_identity.get("name") or (local_candidate.gene_name if local_candidate else None) or symbol,
+            "protein_name": protein_name or name or hgnc_identity.get("name") or (local_candidate.protein_name if local_candidate else None),
+            "summary": limit_sentences(function_summary, 2),
+            "function_summary": function_summary,
+            "disease_association_summary": association if not summary else summary,
+            "function_source": function_source,
+            "function_status_reason": status_reason,
+        }
+
     if ot.get("available"):
         seen: set[str] = set()
         for row in ot.get("candidates", [])[:10]:
@@ -238,6 +375,7 @@ def _build_discovery(
             score = float(row.get("score") or 0.0)
             summary = summarize_gene_association(symbol, row.get("name") or symbol, score, disease_name)
             local_candidate = local_candidates.get(symbol)
+            enriched = enrich_candidate(symbol, row.get("name"), summary, local_candidate)
             candidates.append(
                 CandidateGene(
                     symbol=symbol,
@@ -250,18 +388,12 @@ def _build_discovery(
                             else []
                         ),
                     ],
-                    summary=limit_sentences(
-                        local_candidate.function_summary
-                        if local_candidate and local_candidate.function_summary
-                        else local_candidate.summary if local_candidate and local_candidate.summary else summary,
-                        2,
-                    ),
-                    function_summary=local_candidate.function_summary if local_candidate and local_candidate.function_summary else local_candidate.summary if local_candidate else summary,
+                    **enriched,
                     source="Open Targets",
                     provenance={
                         "score": _prov("external_database", "Open Targets"),
-                        "summary": _prov("external_database", "Open Targets"),
-                        "function_summary": _prov("local_curated" if local_candidate else "external_database", "Local fallback" if local_candidate else "Open Targets"),
+                        "summary": _prov("external_database" if enriched["function_source"] == "UniProt" else "local_curated", enriched["function_source"] or "Open Targets"),
+                        "function_summary": _prov("external_database" if enriched["function_source"] == "UniProt" else "local_curated", enriched["function_source"] or "Open Targets"),
                     },
                 )
             )
@@ -270,11 +402,11 @@ def _build_discovery(
             for candidate in discovery.candidates:
                 if candidate.symbol in seen:
                     continue
+                enriched = enrich_candidate(candidate.symbol, candidate.gene_name or candidate.symbol, candidate.summary or candidate.function_summary or "", candidate)
                 candidates.append(
                     candidate.model_copy(
                         update={
-                            "summary": candidate.summary or candidate.function_summary or limit_sentences(candidate.reasons[0] if candidate.reasons else f"{candidate.symbol} candidate", 2),
-                            "function_summary": candidate.function_summary or candidate.summary,
+                            **enriched,
                             "source": candidate.source or "Local fallback",
                             "provenance": candidate.provenance or {"score": _prov("local_curated", "Local fallback")},
                         }
@@ -284,17 +416,18 @@ def _build_discovery(
                 if len(candidates) >= 10:
                     break
     else:
-        candidates = [
-            c.model_copy(
-                update={
-                    "summary": c.summary or c.function_summary or limit_sentences(c.reasons[0] if c.reasons else f"{c.symbol} candidate", 2),
-                    "function_summary": c.function_summary or c.summary,
-                    "source": "Local fallback",
-                    "provenance": {"score": _prov("local_curated", "Local fallback")},
-                }
+        candidates = []
+        for c in discovery.candidates[:10]:
+            enriched = enrich_candidate(c.symbol, c.gene_name or c.symbol, c.summary or c.function_summary or "", c)
+            candidates.append(
+                c.model_copy(
+                    update={
+                        **enriched,
+                        "source": "Local fallback",
+                        "provenance": c.provenance or {"score": _prov("local_curated", "Local fallback")},
+                    }
+                )
             )
-            for c in discovery.candidates[:10]
-        ]
 
     selected = next((c for c in candidates if c.symbol == gene_symbol), candidates[0] if candidates else None)
     if selected is None:
@@ -373,10 +506,12 @@ def _build_protein(protein: ProteinEffectResult, evidence: NormalizedEvidence, m
         "binding": _prov("simulator_assumption", "Simulator model"),
         "loss_of_function_score": _prov("computed_model", "Simulator model"),
         "structural_impact_placeholder": _prov(
-            "external_database" if protein_info.get("alphafold_available") else "missing_evidence",
-            "AlphaFold DB",
+            "external_database" if protein_info.get("structure_source") not in {None, "none_found"} else "missing_evidence",
+            protein_info.get("structure_source_label") or "Structure source",
         ),
     }
+    structure_label = protein_info.get("structure_source_label") or "No public structure record found after checks"
+    structure_reason = protein_info.get("structure_status_reason") or ""
 
     return protein.model_copy(
         update={
@@ -389,7 +524,7 @@ def _build_protein(protein: ProteinEffectResult, evidence: NormalizedEvidence, m
             "structural_impact_placeholder": (
                 f"AlphaFold structure available; confidence near selected residue is {protein_info.get('alphafold_confidence_label') or 'unknown'}."
                 if protein_info.get("alphafold_available")
-                else "AlphaFold structure unavailable for the selected protein."
+                else f"Structure context source: {structure_label}. {structure_reason}".strip()
             ),
             "summary": protein_info.get("function_summary") or protein_info.get("summary"),
             "explanation": limit_sentences(protein.explanation, 3),
@@ -455,6 +590,7 @@ def run_searchable_pipeline(
     use_external_evidence: bool = True,
     pathway_id: Optional[str] = None,
     pathway_name: Optional[str] = None,
+    protein_accession: Optional[str] = None,
 ) -> Tuple[DiseaseDiscoveryResult, MutationResult, ProteinEffectResult, PathwayResult, NormalizedEvidence, bool, Optional[str]]:
     symbol = normalize_gene_symbol(gene_symbol)
     embedded_gene = embedded_gene_symbol_from_variant_query(mutation_notation)
@@ -463,7 +599,7 @@ def run_searchable_pipeline(
 
     if use_external_evidence:
         evidence = fetch_normalized_evidence(
-            disease_id, disease_name, symbol, mutation_notation, local_kb, pathway_id, pathway_name
+            disease_id, disease_name, symbol, mutation_notation, local_kb, pathway_id, pathway_name, protein_accession
         )
         kb = build_simulation_kb(
             local_kb,

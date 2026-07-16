@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from app.adapters.summarizer import is_placeholder_definition, known_gene_function
 from app.models import CandidateGene, DiseaseDiscoveryResult
 
 
@@ -27,9 +28,12 @@ def discover_candidate_genes(kb: Dict[str, Any], disease_key: str) -> DiseaseDis
         if gene.get("expressed_in"):
             reasons.append(f"Expressed in {', '.join(gene['expressed_in'][:3])}")
         if symbol in disease.get("candidate_gene_weights", {}):
-            reasons.append("Listed as disease-relevant in the local demo knowledge base")
+            reasons.append(f"Prior curated teaching data links {symbol} to {disease['label']} biology")
 
-        summary = gene.get("function_summary") or gene.get("name")
+        known_function = known_gene_function(symbol)
+        summary = known_function or gene.get("function_summary") or gene.get("name")
+        if is_placeholder_definition(summary):
+            summary = known_function or gene.get("name") or f"{symbol} is included in the ranked disease-gene evidence for this run."
         if not summary and reasons:
             summary = reasons[0]
 
@@ -41,7 +45,7 @@ def discover_candidate_genes(kb: Dict[str, Any], disease_key: str) -> DiseaseDis
                 pathways=gene.get("pathways", []),
                 interactions=gene.get("interactions", []),
                 summary=summary,
-                function_summary=gene.get("function_summary"),
+                function_summary=known_function or (None if is_placeholder_definition(gene.get("function_summary")) else gene.get("function_summary")),
             )
         )
 

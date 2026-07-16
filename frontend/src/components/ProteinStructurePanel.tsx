@@ -20,6 +20,15 @@ type AlphaFoldSummary = {
   source: string;
   uniprot_accession: string;
   alphafold_available: boolean;
+  structure_source?: "alphafold" | "rcsb_pdb" | "pdbe" | "uniprot_feature_map" | "none_found";
+  structure_source_label?: string;
+  structure_status_reason?: string;
+  structure_view_model?: {
+    features?: Array<{ type: string; description: string; start: number; end: number; contains_position?: boolean }>;
+    sequence_length?: number | null;
+    position?: number | null;
+  };
+  pdb_crossrefs?: Array<{ id: string; method?: string; resolution?: string; chains?: string; source?: string }>;
   pdb_url: string;
   cif_url: string;
   mmcif_url: string;
@@ -84,8 +93,12 @@ function StructureViewer({
     element.replaceChildren();
     setInteractiveReady(false);
     setStatus("Loading interactive structure viewer...");
-    const proxyUrl = pdbProxyUrl?.startsWith("http") ? pdbProxyUrl : `${apiBase}${pdbProxyUrl || `/api/structure/alphafold/pdb?uniprot_accession=`}`;
-    fetch(proxyUrl)
+    const fetchUrl = pdbProxyUrl
+      ? pdbProxyUrl.startsWith("http")
+        ? pdbProxyUrl
+        : `${apiBase}${pdbProxyUrl}`
+      : pdbUrl;
+    fetch(fetchUrl)
       .then((response) => {
         if (!response.ok) throw new Error("AlphaFold PDB file could not be loaded through backend proxy");
         return response.text();
@@ -101,8 +114,8 @@ function StructureViewer({
           : null;
         setDebug({
           finalPdbUrl: pdbUrl,
-          directUrlWorked: false,
-          backendProxyUsed: true,
+          directUrlWorked: !pdbProxyUrl,
+          backendProxyUsed: Boolean(pdbProxyUrl),
           atomsLoaded: atoms.length,
           residuesLoaded: residues.size,
           selectedResidueFound,
@@ -130,7 +143,7 @@ function StructureViewer({
         if (!cancelled) {
           const message = reason instanceof Error ? reason.message : "Structure viewer failed to load.";
           setStatus(message);
-          setDebug((current) => ({ ...current, backendProxyUsed: true, errorMessage: message }));
+          setDebug((current) => ({ ...current, backendProxyUsed: Boolean(pdbProxyUrl), directUrlWorked: false, errorMessage: message }));
           setInteractiveReady(false);
         }
       });
@@ -159,6 +172,39 @@ function StructureViewer({
           {debug.errorMessage && <div><dt>Error</dt><dd>{debug.errorMessage}</dd></div>}
         </dl>
       </details>
+    </div>
+  );
+}
+
+function FeatureMap({ summary }: { summary: AlphaFoldSummary }) {
+  const features = summary.structure_view_model?.features ?? [];
+  const length = summary.structure_view_model?.sequence_length || Math.max(...features.map((feature) => feature.end), summary.mutation_position || 1);
+  const position = summary.mutation_position || summary.structure_view_model?.position || null;
+  return (
+    <div className="featureMapPanel">
+      <div className="featureTrack">
+        {features.map((feature) => {
+          const left = Math.max(0, Math.min(98, (feature.start / length) * 100));
+          const width = Math.max(2, Math.min(100 - left, ((feature.end - feature.start + 1) / length) * 100));
+          return (
+            <span
+              key={`${feature.type}-${feature.start}-${feature.end}-${feature.description}`}
+              className={feature.contains_position ? "featureSegment hit" : "featureSegment"}
+              style={{ left: `${left}%`, width: `${width}%` }}
+              title={`${feature.type}: ${feature.description} (${feature.start}-${feature.end})`}
+            />
+          );
+        })}
+        {position && <b className="featureMutationMarker" style={{ left: `${Math.max(0, Math.min(100, (position / length) * 100))}%` }}>{position}</b>}
+      </div>
+      <div className="featureList">
+        {features.length ? features.slice(0, 8).map((feature) => (
+          <div key={`${feature.type}-${feature.start}-${feature.end}`}>
+            <strong>{feature.type}</strong>
+            <span>{feature.description} ({feature.start}-{feature.end}){feature.contains_position ? " · mutation is in this region" : ""}</span>
+          </div>
+        )) : <p className="muted">No UniProt feature intervals were returned for this protein.</p>}
+      </div>
     </div>
   );
 }
@@ -227,11 +273,11 @@ export function ProteinStructurePanel({
     <div className="structurePanel">
       <div className="structurePanelHeader">
         <div>
-          <span className="eyebrow">AlphaFold structure context</span>
+          <span className="eyebrow">Protein structure context</span>
           <h3>{proteinName || uniprotAccession}</h3>
         </div>
-        <span className={summary?.alphafold_available ? "sourceStatus available" : "sourceStatus unavailable"}>
-          {loading ? "Checking AlphaFold" : summary?.alphafold_available ? "AlphaFold available" : "AlphaFold unavailable"}
+        <span className={summary?.structure_source && summary.structure_source !== "none_found" ? "sourceStatus available" : "sourceStatus unavailable"}>
+          {loading ? "Checking structure sources" : summary?.structure_source_label || "Checking structure sources"}
         </span>
       </div>
       {mutation && <p className="muted">Variant being mapped: <strong>{mutation}</strong>{position ? ` at protein position ${position}` : ""}</p>}
@@ -249,29 +295,38 @@ export function ProteinStructurePanel({
             <div><span>Residue change</span><strong>{summary.normal_residue && summary.mutant_residue ? `${summary.normal_residue}→${summary.mutant_residue}` : "not parsed"}</strong></div>
             <div><span>Domain hit</span><strong>{summary.domain_hit || "not mapped"}</strong></div>
           </div>
-          {summary.alphafold_available ? (
+          {summary.alphafold_available || summary.structure_source === "rcsb_pdb" ? (
             <div className="proteinStructureSingle">
               <section>
                 <div className="proteinStructureSingleHeader">
                   <div>
-                    <h4>AlphaFold reference structure</h4>
+                    <h4>{summary.structure_source_label || "Protein reference structure"}</h4>
                     <p className="muted">
-                      Native AlphaFold structure for {summary.uniprot_accession}
+                      Native {summary.structure_source_label || "structure"} record for {summary.uniprot_accession}
                       {summary.mutation_position ? ` with residue ${summary.mutation_position} highlighted` : ""}.
-                      This maps the typed variant onto the reference model; it is not a fabricated mutant prediction.
+                      This maps the typed variant onto a reference model; it is not a fabricated mutant prediction.
                     </p>
                   </div>
                   {summary.normal_residue && summary.mutant_residue && (
                     <span className="sourceStatus available">{summary.normal_residue}→{summary.mutant_residue}</span>
                   )}
                 </div>
-                <StructureViewer apiBase={apiBase} pdbUrl={summary.pdb_url} pdbProxyUrl={summary.pdb_proxy_url} mode="after" position={summary.mutation_position} />
+                <StructureViewer apiBase={apiBase} pdbUrl={summary.pdb_url} pdbProxyUrl={summary.structure_source === "alphafold" ? summary.pdb_proxy_url : undefined} mode="after" position={summary.mutation_position} />
+                {summary.structure_source !== "alphafold" && <FeatureMap summary={summary} />}
               </section>
               <div className="structureLinks">
                 <a href={summary.pdb_url} target="_blank" rel="noreferrer">Open PDB</a>
                 <a href={summary.mmcif_url || summary.cif_url} target="_blank" rel="noreferrer">Open mmCIF</a>
                 <a href={summary.pae_url} target="_blank" rel="noreferrer">Open PAE</a>
               </div>
+            </div>
+          ) : summary.structure_source === "uniprot_feature_map" ? (
+            <div className="proteinStructureSingle">
+              <section>
+                <h4>UniProt feature map</h4>
+                <p className="muted">{summary.message}</p>
+                <FeatureMap summary={summary} />
+              </section>
             </div>
           ) : (
             <p className="muted">{summary.message}</p>

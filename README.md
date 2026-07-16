@@ -54,7 +54,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8001
 ```
 
 Test backend:
@@ -100,6 +100,8 @@ npm run dev
 
 Open the local Vite URL, usually `http://localhost:5173`.
 
+The Vite dev server proxies `/api` to `http://127.0.0.1:8001` by default. Override this with `VITE_API_PROXY_TARGET` in `frontend/.env.local` if needed.
+
 Type-check the frontend with:
 
 ```bash
@@ -112,19 +114,19 @@ npm run lint
 ### Health
 
 ```bash
-curl http://localhost:8000/api/health
+curl http://localhost:8001/api/health
 ```
 
 ### Catalog
 
 ```bash
-curl http://localhost:8000/api/catalog
+curl http://localhost:8001/api/catalog
 ```
 
 ### Run simulation
 
 ```bash
-curl -X POST http://localhost:8000/api/simulate \
+curl -X POST http://localhost:8001/api/simulate \
   -H "Content-Type: application/json" \
   -d '{"disease":"cancer","gene":"TP53","mutation":"p.R175H","steps":60,"initial_mutated_fraction":0.02}'
 ```

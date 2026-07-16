@@ -409,6 +409,7 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+  min-width: 0;
 }
 
 .sourceStatus {
@@ -419,11 +420,23 @@ h1 {
   color: var(--badge-text);
   font-size: 11px;
   font-weight: 900;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .sourceStatus.unavailable {
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 13%, var(--panel-bg));
+}
+
+.sourceStatus.checked {
+  color: #596d66;
+  background: color-mix(in srgb, #9fb0a9 15%, var(--panel-bg));
+}
+
+:root[data-theme="dark"] .sourceStatus.checked {
+  color: var(--muted-text);
+  background: color-mix(in srgb, var(--muted-text) 12%, var(--panel-bg));
 }
 
 .meaningGrid,
@@ -432,6 +445,61 @@ h1 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
+}
+
+.featureMapPanel {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel-bg);
+}
+
+.featureTrack {
+  position: relative;
+  height: 58px;
+  border-radius: 999px;
+  background: #eef6f1;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.featureSegment {
+  position: absolute;
+  top: 18px;
+  height: 20px;
+  border-radius: 999px;
+  background: #8fbfa8;
+}
+
+.featureSegment.hit {
+  background: #d45f5f;
+  box-shadow: 0 0 0 4px rgba(212, 95, 95, 0.16);
+}
+
+.featureMutationMarker {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #10251f;
+  color: #fff;
+  font-size: 11px;
+}
+
+.featureList {
+  display: grid;
+  gap: 8px;
+}
+
+.featureList div {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 10px;
+  color: var(--text);
 }
 
 .meaningGrid > div,
@@ -716,16 +784,27 @@ button:disabled { opacity: 0.55; cursor: wait; }
 .metricChangeCard { display: grid; gap: 12px; padding: 15px; border-radius: 18px; border: 1px solid #dce9df; background: #f7fbf8; }
 .metricChangeCard.increased { border-color: #9bcfb6; }
 .metricChangeCard.decreased { border-color: #efb1a9; }
+.metricChangeCard.beneficial { border-color: #9bcfb6; background: #f3fbf7; }
+.metricChangeCard.harmful { border-color: #efb1a9; background: #fff7f5; }
+.metricChangeCard.neutral { border-color: #ecd997; background: #fffdf4; }
 .metricChangeHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .metricChangeHeader strong { display: inline-flex; align-items: center; gap: 6px; color: #12201d; }
 .metricChangeHeader span { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; background: #edf7f1; color: #237457; font-size: 11px; font-weight: 900; }
 .metricChangeCard.decreased .metricChangeHeader span { background: #fff0ef; color: #b63f3f; }
+.metricChangeCard.harmful .metricChangeHeader span { background: #fff0ef; color: #b63f3f; }
+.metricChangeCard.neutral .metricChangeHeader span { background: #fff8dc; color: #8a641d; }
 .metricChangeBars { display: grid; grid-template-columns: 86px minmax(0, 1fr); align-items: center; gap: 7px 10px; }
 .metricChangeBars span { color: #64746f; font-size: 11px; font-weight: 900; }
 .metricChangeBars b { color: #12201d; }
 .metricChangeCard p { margin: 0; color: #44534f; line-height: 1.5; }
+.metricChangeCard .metricSemantic { font-weight: 800; color: #2d5e4d; }
+.metricChangeCard.harmful .metricSemantic { color: #9f2f2f; }
+.metricChangeCard.neutral .metricSemantic { color: #7a5a18; }
 .metricChangeCard small { color: #64746f; font-weight: 800; }
 .neutralBar { background: linear-gradient(90deg, #cad7d0, #64746f); }
+.barInner.beneficial { background: linear-gradient(90deg, #9bcfb6, #237457); }
+.barInner.harmful { background: linear-gradient(90deg, #efb1a9, #b63f3f); }
+.barInner.neutral { background: linear-gradient(90deg, #e9d895, #9b7b2f); }
 .interventionVisualGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .interventionVisualGrid > div { min-width: 0; }
 .interventionVisualGrid h3 { margin: 0 0 12px; }
@@ -1583,6 +1662,12 @@ p { color: #2c3b37; line-height: 1.58; }
   font-size: 12px;
   color: #64746f;
 }
+.candidateAssociation {
+  margin: 0;
+  font-size: 11px;
+  color: #4f6f63;
+  line-height: 1.45;
+}
 .candidate.selected {
   background: #e7f6ef;
   border-color: #9fcbb8;
@@ -2145,8 +2230,13 @@ p { color: #2c3b37; line-height: 1.58; }
 }
 
 .d3Tooltip strong,
-.d3Tooltip span {
+.d3Tooltip span,
+.d3Tooltip p {
   color: inherit;
+}
+
+.d3Tooltip p {
+  margin: 6px 0 0;
 }
 
 .structureMetricGrid {
@@ -2589,8 +2679,16 @@ main,
 :root[data-theme="dark"] .d3ChartWrap,
 :root[data-theme="dark"] .structurePanel,
 :root[data-theme="dark"] .structureMetricGrid > div,
-:root[data-theme="dark"] .structureLinks a {
+:root[data-theme="dark"] .structureLinks a,
+:root[data-theme="dark"] .featureMapPanel {
   background: var(--panel-alt-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .reasoningStep dl > div,
+:root[data-theme="dark"] .featureTrack {
+  background: #0b1714;
   border-color: var(--border);
   color: var(--text);
 }
@@ -2658,7 +2756,26 @@ main,
 }
 
 :root[data-theme="dark"] .timelineToggle span,
-:root[data-theme="dark"] .evolutionEvents strong {
+:root[data-theme="dark"] .evolutionEvents strong,
+:root[data-theme="dark"] .contextStrip b,
+:root[data-theme="dark"] .simSlider strong,
+:root[data-theme="dark"] .cloneReasoning strong,
+:root[data-theme="dark"] .metricChangeHeader strong,
+:root[data-theme="dark"] .evidenceSummaryGrid strong,
+:root[data-theme="dark"] .bodyComparisonControls strong,
+:root[data-theme="dark"] .reasoningStep dd,
+:root[data-theme="dark"] .twinRiskTable td strong,
+:root[data-theme="dark"] .systemTags span,
+:root[data-theme="dark"] .studentTermGrid strong,
+:root[data-theme="dark"] .drugResultCard strong,
+:root[data-theme="dark"] .candidateMain span,
+:root[data-theme="dark"] .candidateReason,
+:root[data-theme="dark"] .candidateAssociation,
+:root[data-theme="dark"] .twinReasoning,
+:root[data-theme="dark"] .structurePanel p,
+:root[data-theme="dark"] .d3Tooltip p,
+:root[data-theme="dark"] .modelNote p,
+:root[data-theme="dark"] .featureList span {
   color: var(--text);
 }
 
@@ -2682,7 +2799,15 @@ main,
 :root[data-theme="dark"] .metricChangeCard p,
 :root[data-theme="dark"] .bodyComparisonPanel p,
 :root[data-theme="dark"] .studentTermGrid span,
-:root[data-theme="dark"] .validationList li {
+:root[data-theme="dark"] .validationList li,
+:root[data-theme="dark"] .cloneCard p,
+:root[data-theme="dark"] .cloneReasoning p,
+:root[data-theme="dark"] .cloneReasoning li,
+:root[data-theme="dark"] .baselineMissing p,
+:root[data-theme="dark"] .wideEvidence,
+:root[data-theme="dark"] .twinSplit p,
+:root[data-theme="dark"] .evidenceList > div,
+:root[data-theme="dark"] .bodyCallout span {
   color: var(--muted-text);
 }
 
@@ -2717,6 +2842,24 @@ main,
 :root[data-theme="dark"] .metricChangeBars b {
   color: var(--text);
   fill: var(--text);
+}
+
+:root[data-theme="dark"] .metricChangeCard.beneficial,
+:root[data-theme="dark"] .metricChangeCard.harmful,
+:root[data-theme="dark"] .metricChangeCard.neutral {
+  background: var(--panel-alt-bg);
+}
+
+:root[data-theme="dark"] .metricChangeCard.beneficial .metricSemantic {
+  color: var(--success);
+}
+
+:root[data-theme="dark"] .metricChangeCard.harmful .metricSemantic {
+  color: var(--danger);
+}
+
+:root[data-theme="dark"] .metricChangeCard.neutral .metricSemantic {
+  color: var(--warning);
 }
 
 :root[data-theme="dark"] input,
